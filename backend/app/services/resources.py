@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -9,19 +12,25 @@ from sqlalchemy.orm import Session
 from app.core.private_storage import (
     delete_private_storage_key,
     resolve_private_storage_key,
-    store_resource_file,
 )
+from app.core.storage import get_storage_provider
 from app.models.academic import (
     AcademicLevel,
     AcademicSession,
     Course,
+    CourseOffering,
     ResourceType,
     Semester,
     StudentAcademicProfile,
 )
 from app.models.audit import AuditEvent
 from app.models.commerce import Entitlement, PackageCourse, PackageResource, Payment
-from app.models.resource import Resource, ResourceCategory
+from app.models.resource import (
+    Resource,
+    ResourceCategory,
+    ResourceCourseOffering,
+    ResourceFile,
+)
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.schemas.resource import AccessPolicy
@@ -31,6 +40,7 @@ from app.services.errors import ConflictError, NotFoundError, PolicyError
 _RESOURCE_REFERENCES = {
     "category_id": ResourceCategory,
     "course_id": Course,
+    "course_offering_id": CourseOffering,
     "academic_level_id": AcademicLevel,
     "academic_session_id": AcademicSession,
     "semester_id": Semester,
@@ -74,24 +84,39 @@ def create_resource(
     description: str | None,
     category_id: int | None,
     course_id: int | None,
-    academic_level_id: int | None,
-    academic_session_id: int | None,
-    semester_id: int | None,
-    resource_type_id: int | None,
-    is_published: bool,
-    access_policy: AccessPolicy,
+    course_offering_id: int | None = None,
+    academic_level_id: int | None = None,
+    academic_session_id: int | None = None,
+    semester_id: int | None = None,
+    resource_type_id: int | None = None,
+    is_published: bool = False,
+    access_policy: AccessPolicy = "subscription_or_entitlement",
     preview_policy: str = "none",
     preview_content: str | None = None,
-    requires_verification: bool,
-    available_from: datetime | None,
-    available_until: datetime | None,
-    original_filename: str,
-    content_type: str | None,
-    content: bytes,
+    requires_verification: bool = True,
+    available_from: datetime | None = None,
+    available_until: datetime | None = None,
+    original_filename: str = "",
+    content_type: str | None = None,
+    content: bytes | None = None,
+    files: list[tuple[bytes, str, str | None]] | None = None,
+    additional_offering_ids: list[int] | None = None,
 ) -> Resource:
+    # Auto-populate course, level, semester from offering if provided
+    if course_offering_id is not None:
+        offering = db.get(CourseOffering, course_offering_id)
+        if offering is not None:
+            if course_id is None:
+                course_id = offering.course_id
+            if academic_level_id is None:
+                academic_level_id = offering.academic_level_id
+            if semester_id is None:
+                semester_id = offering.semester_id
+
     values = {
         "category_id": category_id,
         "course_id": course_id,
+        "course_offering_id": course_offering_id,
         "academic_level_id": academic_level_id,
         "academic_session_id": academic_session_id,
         "semester_id": semester_id,
@@ -100,16 +125,40 @@ def create_resource(
         "available_until": available_until,
     }
     _validate_references(db, values)
-    storage_path, mime_type, file_name = store_resource_file(
-        content, original_filename, content_type
-    )
+
+    file_items = files or []
+    if not file_items and content:
+        file_items = [(content, original_filename, content_type)]
+
+    if not file_items:
+        raise ValueError("At least one valid file or image must be provided.")
+
+    storage_provider = get_storage_provider()
+    stored_files = []
+    try:
+        for idx, (f_content, f_name, f_mime) in enumerate(file_items, start=1):
+            stored = storage_provider.store_file(
+                f_content, f_name, f_mime, subfolder="resources"
+            )
+            stored_files.append((stored, idx))
+    except Exception:
+        for stored, _ in stored_files:
+            storage_provider.delete_file(stored.storage_key)
+        raise
+
+    # Primary file is the first file
+    primary_stored, _ = stored_files[0]
+    total_bytes = sum(stored.size_bytes for stored, _ in stored_files)
+
     resource = Resource(
         title=title.strip(),
         description=description,
-        file_name=file_name,
-        storage_path=storage_path,
-        mime_type=mime_type,
-        file_size_bytes=len(content),
+        file_name=primary_stored.original_filename,
+        storage_path=primary_stored.storage_key,
+        storage_provider=primary_stored.storage_provider,
+        mime_type=primary_stored.content_type,
+        file_size_bytes=total_bytes,
+        file_checksum_sha256=primary_stored.sha256,
         created_by_id=admin.id,
         is_published=is_published,
         access_policy=access_policy,
@@ -118,16 +167,43 @@ def create_resource(
         requires_verification=requires_verification,
         **values,
     )
+
     try:
         db.add(resource)
         db.flush()
+
+        # Add ResourceFile records
+        for stored, order in stored_files:
+            rf = ResourceFile(
+                resource_id=resource.id,
+                storage_provider=stored.storage_provider,
+                storage_key=stored.storage_key,
+                original_filename=stored.original_filename,
+                mime_type=stored.content_type,
+                file_size_bytes=stored.size_bytes,
+                file_checksum_sha256=stored.sha256,
+                page_order=order,
+            )
+            db.add(rf)
+
+        # Associate course offerings
+        all_offerings = set()
+        if course_offering_id:
+            all_offerings.add(course_offering_id)
+        if additional_offering_ids:
+            all_offerings.update(additional_offering_ids)
+
+        for off_id in all_offerings:
+            db.add(ResourceCourseOffering(resource_id=resource.id, course_offering_id=off_id))
+
         _audit(db, admin.id, "admin.resource_created", resource.id)
         db.commit()
         db.refresh(resource)
         return resource
     except SQLAlchemyError:
         db.rollback()
-        delete_private_storage_key(storage_path)
+        for stored, _ in stored_files:
+            storage_provider.delete_file(stored.storage_key)
         raise
 
 
@@ -180,6 +256,27 @@ def get_resource(db: Session, resource_id: int) -> Resource:
     return resource
 
 
+def list_resource_files(db: Session, resource_id: int) -> list[ResourceFile]:
+    return list(
+        db.scalars(
+            select(ResourceFile)
+            .where(ResourceFile.resource_id == resource_id)
+            .order_by(ResourceFile.page_order.asc(), ResourceFile.id.asc())
+        )
+    )
+
+
+def get_resource_file(db: Session, resource_id: int, file_id: int) -> ResourceFile:
+    file = db.scalar(
+        select(ResourceFile).where(
+            ResourceFile.id == file_id, ResourceFile.resource_id == resource_id
+        )
+    )
+    if file is None:
+        raise NotFoundError("Resource file not found.")
+    return file
+
+
 def update_resource(
     db: Session, admin: User, resource: Resource, changes: dict[str, Any]
 ) -> Resource:
@@ -196,6 +293,17 @@ def update_resource(
         if field_name == "title":
             value = value.strip()
         setattr(resource, field_name, value)
+
+    if changes.get("course_offering_id"):
+        off_id = changes["course_offering_id"]
+        exists_assoc = db.scalar(
+            select(ResourceCourseOffering.id).where(
+                ResourceCourseOffering.resource_id == resource.id,
+                ResourceCourseOffering.course_offering_id == off_id,
+            )
+        )
+        if not exists_assoc:
+            db.add(ResourceCourseOffering(resource_id=resource.id, course_offering_id=off_id))
     try:
         _audit(db, admin.id, "admin.resource_updated", resource.id)
         db.commit()
@@ -214,25 +322,51 @@ def replace_resource_file(
     content_type: str | None,
     content: bytes,
 ) -> Resource:
-    new_storage_path, mime_type, file_name = store_resource_file(
-        content, original_filename, content_type
-    )
+    storage_provider = get_storage_provider()
+    stored = storage_provider.store_file(content, original_filename, content_type)
     old_storage_path = resource.storage_path
-    resource.storage_path = new_storage_path
-    resource.file_name = file_name
-    resource.mime_type = mime_type
-    resource.file_size_bytes = len(content)
+    resource.storage_path = stored.storage_key
+    resource.storage_provider = stored.storage_provider
+    resource.file_name = stored.original_filename
+    resource.mime_type = stored.content_type
+    resource.file_size_bytes = stored.size_bytes
+    resource.file_checksum_sha256 = stored.sha256
+
     try:
+        # Also update or insert primary resource file record
+        primary_rf = db.scalar(
+            select(ResourceFile)
+            .where(ResourceFile.resource_id == resource.id, ResourceFile.page_order == 1)
+        )
+        if primary_rf is None:
+            primary_rf = ResourceFile(
+                resource_id=resource.id,
+                storage_provider=stored.storage_provider,
+                storage_key=stored.storage_key,
+                original_filename=stored.original_filename,
+                mime_type=stored.content_type,
+                file_size_bytes=stored.size_bytes,
+                file_checksum_sha256=stored.sha256,
+                page_order=1,
+            )
+            db.add(primary_rf)
+        else:
+            primary_rf.storage_key = stored.storage_key
+            primary_rf.storage_provider = stored.storage_provider
+            primary_rf.original_filename = stored.original_filename
+            primary_rf.mime_type = stored.content_type
+            primary_rf.file_size_bytes = stored.size_bytes
+            primary_rf.file_checksum_sha256 = stored.sha256
+
         _audit(db, admin.id, "admin.resource_file_replaced", resource.id)
         db.commit()
         db.refresh(resource)
     except SQLAlchemyError:
         db.rollback()
-        delete_private_storage_key(new_storage_path)
+        storage_provider.delete_file(stored.storage_key)
         raise
-    old_path = resolve_private_storage_key(old_storage_path)
-    if old_path.is_file():
-        delete_private_storage_key(old_storage_path)
+
+    storage_provider.delete_file(old_storage_path)
     return resource
 
 
@@ -246,8 +380,13 @@ def delete_resource(db: Session, admin: User, resource: Resource) -> None:
     if referenced_by_package is not None or referenced_by_entitlement is not None:
         raise ConflictError("Remove this resource from packages and entitlements before deleting it.")
 
-    storage_path = resource.storage_path
+    storage_provider = get_storage_provider()
     resource_id = resource.id
+    keys_to_delete = [resource.storage_path]
+    for rf in resource.files:
+        if rf.storage_key not in keys_to_delete:
+            keys_to_delete.append(rf.storage_key)
+
     try:
         db.delete(resource)
         _audit(db, admin.id, "admin.resource_deleted", resource_id)
@@ -255,9 +394,9 @@ def delete_resource(db: Session, admin: User, resource: Resource) -> None:
     except IntegrityError as exc:
         db.rollback()
         raise ConflictError("The resource is still referenced by other platform records.") from exc
-    path = resolve_private_storage_key(storage_path)
-    if path.is_file():
-        delete_private_storage_key(storage_path)
+
+    for key in keys_to_delete:
+        storage_provider.delete_file(key)
 
 
 def list_resource_categories(db: Session) -> list[ResourceCategory]:
@@ -343,9 +482,23 @@ def can_download_resource(db: Session, user: User, resource: Resource) -> bool:
 
 
 def resource_download_path(resource: Resource) -> Path:
-    path = resolve_private_storage_key(resource.storage_path)
-    if not path.is_file():
-        raise NotFoundError("Resource file not found.")
+    storage_provider = get_storage_provider()
+    path = storage_provider.resolve_local_path(resource.storage_path)
+    if path is None or not path.is_file():
+        # Fall back to checking local private storage directory
+        path = resolve_private_storage_key(resource.storage_path)
+        if not path.is_file():
+            raise NotFoundError("Resource file not found.")
+    return path
+
+
+def resource_file_download_path(file: ResourceFile) -> Path:
+    storage_provider = get_storage_provider()
+    path = storage_provider.resolve_local_path(file.storage_key)
+    if path is None or not path.is_file():
+        path = resolve_private_storage_key(file.storage_key)
+        if not path.is_file():
+            raise NotFoundError("Resource file not found.")
     return path
 
 

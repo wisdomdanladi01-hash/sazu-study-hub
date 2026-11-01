@@ -16,6 +16,17 @@ import {
   Edit2,
   Trash2,
   RefreshCw,
+  FileText,
+  Image as ImageIcon,
+  ArrowUp,
+  ArrowDown,
+  X,
+  CheckCircle2,
+  Layers,
+  GraduationCap,
+  Calendar,
+  Lock,
+  ExternalLink,
 } from 'lucide-react';
 import { formatDate } from '@/utils/format';
 
@@ -31,6 +42,7 @@ export function AdminResourcesPage() {
   const [editModalItem, setEditModalItem] = useState<AdminResourceItem | null>(null);
   const [deleteModalItem, setDeleteModalItem] = useState<AdminResourceItem | null>(null);
   const [replacingFileId, setReplacingFileId] = useState<number | null>(null);
+  const [viewFilesItem, setViewFilesItem] = useState<AdminResourceItem | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadData = () => {
@@ -75,7 +87,7 @@ export function AdminResourcesPage() {
         <div>
           <h1 className="font-display text-2xl font-bold text-ink-950">Learning Resource Management</h1>
           <p className="mt-1 text-sm text-ink-600">
-            Upload course materials, manage publication states, configure public sample previews, and enforce access policies.
+            Upload course materials, associate academic offerings, manage multi-page resources, and configure storage.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -131,7 +143,7 @@ export function AdminResourcesPage() {
               <thead className="bg-ink-50/50 border-b border-ink-100 text-xs font-bold uppercase text-ink-600">
                 <tr>
                   <th className="px-4 py-3">Resource Title</th>
-                  <th className="px-4 py-3">File / Size</th>
+                  <th className="px-4 py-3">File / Storage</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Access Policy</th>
                   <th className="px-4 py-3">Preview Policy</th>
@@ -145,10 +157,30 @@ export function AdminResourcesPage() {
                     <td className="px-4 py-3">
                       <p className="font-semibold text-ink-900">{r.title}</p>
                       {r.description && <p className="text-xs text-ink-500 line-clamp-1">{r.description}</p>}
+                      {r.course_offering_id && (
+                        <span className="inline-block mt-1 text-[11px] font-mono text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
+                          Offering #{r.course_offering_id}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-xs text-ink-600 whitespace-nowrap">
                       <p className="font-mono">{r.file_name}</p>
-                      <p className="text-ink-400 mt-0.5">{(r.file_size_bytes / 1024).toFixed(0)} KB &middot; {r.mime_type}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-ink-400">{(r.file_size_bytes / 1024).toFixed(0)} KB</span>
+                        <span className="text-ink-300">•</span>
+                        <Badge tone={r.storage_provider === 'vercel_blob' ? 'teal' : 'neutral'} className="text-[10px] py-0 px-1.5">
+                          {r.storage_provider === 'vercel_blob' ? 'Vercel Blob' : 'Local Storage'}
+                        </Badge>
+                      </div>
+                      {r.files && r.files.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setViewFilesItem(r)}
+                          className="mt-1 text-[11px] font-semibold text-teal-700 hover:text-teal-900 flex items-center gap-1"
+                        >
+                          <Layers className="h-3 w-3" /> {r.files.length} Pages (Series)
+                        </button>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <Badge tone={r.is_published ? 'green' : 'neutral'}>
@@ -176,7 +208,7 @@ export function AdminResourcesPage() {
                           setReplacingFileId(r.id);
                           fileInputRef.current?.click();
                         }}
-                        title="Replace file bytes"
+                        title="Replace primary file bytes"
                       >
                         Replace file
                       </Button>
@@ -200,7 +232,7 @@ export function AdminResourcesPage() {
         )}
       </Card>
 
-      {/* Upload Modal */}
+      {/* Upload Modal (Structured Section A, B, C, D) */}
       {uploadModalOpen && (
         <UploadResourceModal
           catalogue={catalogue}
@@ -222,6 +254,38 @@ export function AdminResourcesPage() {
             loadData();
           }}
         />
+      )}
+
+      {/* Multi-file Pages Modal */}
+      {viewFilesItem && (
+        <Dialog open onClose={() => setViewFilesItem(null)} title={`Resource Pages: ${viewFilesItem.title}`} size="lg">
+          <div className="space-y-4">
+            <p className="text-xs text-ink-600">
+              This resource contains multiple ordered document pages or photographs belonging to the same academic material.
+            </p>
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {viewFilesItem.files?.map((f) => (
+                <div key={f.id} className="flex items-center justify-between p-3 bg-ink-50 rounded-xl border border-ink-100">
+                  <div className="flex items-center gap-3">
+                    <span className="px-2 py-0.5 rounded text-xs font-bold bg-teal-100 text-teal-800">
+                      Page {f.page_order}
+                    </span>
+                    <div>
+                      <p className="text-xs font-semibold text-ink-900 font-mono">{f.original_filename}</p>
+                      <p className="text-[11px] text-ink-500">{(f.file_size_bytes / 1024).toFixed(0)} KB • {f.mime_type}</p>
+                    </div>
+                  </div>
+                  <Badge tone={f.storage_provider === 'vercel_blob' ? 'teal' : 'neutral'}>
+                    {f.storage_provider}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end pt-2">
+              <Button onClick={() => setViewFilesItem(null)}>Close</Button>
+            </div>
+          </div>
+        </Dialog>
       )}
 
       {/* Delete Confirmation Modal */}
@@ -253,6 +317,12 @@ export function AdminResourcesPage() {
   );
 }
 
+interface UploadFileItem {
+  id: string;
+  file: File;
+  pageOrder: number;
+}
+
 function UploadResourceModal({
   catalogue,
   onClose,
@@ -262,19 +332,28 @@ function UploadResourceModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [file, setFile] = useState<File | null>(null);
-
-  // Dependent academic selectors
+  // Section A: Academic Identification
   const [facultyId, setFacultyId] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [programmeId, setProgrammeId] = useState('');
-  const [courseId, setCourseId] = useState('');
+  const [sessionId, setSessionId] = useState('');
   const [levelId, setLevelId] = useState('');
   const [semesterId, setSemesterId] = useState('');
+  const [courseOfferingId, setCourseOfferingId] = useState('');
+
+  // Section B: Resource Information
+  const [title, setTitle] = useState('');
   const [resourceTypeId, setResourceTypeId] = useState('');
+  const [description, setDescription] = useState('');
+  const [examYear, setExamYear] = useState('');
+
+  // Section C: File Uploads (Multiple images or single PDF)
+  const [files, setFiles] = useState<UploadFileItem[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Section D: Access & Publication
   const [accessPolicy, setAccessPolicy] = useState('subscription_or_entitlement');
+  const [requiresVerification, setRequiresVerification] = useState(true);
   const [previewPolicy, setPreviewPolicy] = useState<'none' | 'public_sample' | 'authenticated_only'>('none');
   const [previewContent, setPreviewContent] = useState('');
   const [isPublished, setIsPublished] = useState(true);
@@ -282,7 +361,7 @@ function UploadResourceModal({
   const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Filtered departments based on faculty
+  // Filter departments based on faculty
   const availableDepts = useMemo(() => {
     if (!catalogue) return [];
     return facultyId
@@ -290,7 +369,7 @@ function UploadResourceModal({
       : catalogue.departments;
   }, [catalogue, facultyId]);
 
-  // Filtered programmes based on faculty
+  // Filter programmes based on faculty/dept
   const availableProgrammes = useMemo(() => {
     if (!catalogue) return [];
     return facultyId
@@ -298,20 +377,97 @@ function UploadResourceModal({
       : catalogue.programmes;
   }, [catalogue, facultyId]);
 
-  // Filtered courses based on programme or department
-  const availableCourses = useMemo(() => {
+  // Available Course Offerings matching selection
+  const availableOfferings = useMemo(() => {
     if (!catalogue) return [];
-    return catalogue.courses.filter((c) => {
-      const matchProg = !programmeId || String(c.programme_id) === programmeId;
-      const matchDept = !departmentId || String(c.department_id) === departmentId;
-      return matchProg && matchDept;
+    const list: Array<{
+      offeringId: number;
+      courseId: number;
+      courseCode: string;
+      courseTitle: string;
+      creditUnits: number | null;
+      levelName: string | null;
+      semesterNumber: number | null;
+      sessionName: string | null;
+      curriculumVersion: string;
+    }> = [];
+
+    for (const course of catalogue.courses) {
+      if (programmeId && String(course.programme_id) !== programmeId) continue;
+      if (departmentId && String(course.department_id) !== departmentId) continue;
+
+      for (const off of course.offerings) {
+        if (sessionId && String(off.academic_session_id) !== sessionId) continue;
+        if (levelId && String(off.academic_level_id) !== levelId) continue;
+        if (semesterId && String(off.semester_id) !== semesterId) continue;
+
+        list.push({
+          offeringId: off.id,
+          courseId: course.id,
+          courseCode: course.code,
+          courseTitle: course.title,
+          creditUnits: off.credit_units,
+          levelName: off.level,
+          semesterNumber: off.semester,
+          sessionName: off.academic_session,
+          curriculumVersion: off.curriculum_version,
+        });
+      }
+    }
+    return list;
+  }, [catalogue, programmeId, departmentId, sessionId, levelId, semesterId]);
+
+  // Selected Offering details
+  const selectedOffering = useMemo(() => {
+    return availableOfferings.find((o) => String(o.offeringId) === courseOfferingId) ?? null;
+  }, [availableOfferings, courseOfferingId]);
+
+  // File handling
+  const addFiles = (newFiles: FileList | File[]) => {
+    const validExtensions = ['.pdf', '.jpg', '.jpeg', '.png', '.webp'];
+    const added: UploadFileItem[] = [];
+    let currentCount = files.length;
+
+    Array.from(newFiles).forEach((f) => {
+      const ext = '.' + f.name.split('.').pop()?.toLowerCase();
+      if (!validExtensions.includes(ext)) {
+        setErr(`Unsupported file type: ${f.name}. Supported formats: PDF, JPG, PNG, WebP.`);
+        return;
+      }
+      currentCount += 1;
+      added.push({
+        id: `${Date.now()}-${Math.random()}`,
+        file: f,
+        pageOrder: currentCount,
+      });
     });
-  }, [catalogue, programmeId, departmentId]);
+
+    setFiles((prev) => [...prev, ...added]);
+  };
+
+  const removeFile = (index: number) => {
+    setFiles((prev) => {
+      const updated = prev.filter((_, i) => i !== index);
+      return updated.map((item, i) => ({ ...item, pageOrder: i + 1 }));
+    });
+  };
+
+  const moveFile = (index: number, direction: 'up' | 'down') => {
+    setFiles((prev) => {
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const copy = [...prev];
+      const temp = copy[index];
+      copy[index] = copy[targetIndex];
+      copy[targetIndex] = temp;
+      return copy.map((item, i) => ({ ...item, pageOrder: i + 1 }));
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file) {
-      setErr('Please select a file to upload.');
+    if (files.length === 0) {
+      setErr('Please select or drop at least one file or image to upload.');
       return;
     }
     setUploading(true);
@@ -320,17 +476,25 @@ function UploadResourceModal({
     const formData = new FormData();
     formData.append('title', title.trim());
     formData.append('description', description.trim() || '');
-    formData.append('upload', file);
     formData.append('is_published', isPublished ? 'true' : 'false');
     formData.append('access_policy', accessPolicy);
+    formData.append('requires_verification', requiresVerification ? 'true' : 'false');
     formData.append('preview_policy', previewPolicy);
     if (previewContent.trim()) {
       formData.append('preview_content', previewContent.trim());
     }
-    if (courseId) formData.append('course_id', courseId);
-    if (levelId) formData.append('academic_level_id', levelId);
-    if (semesterId) formData.append('semester_id', semesterId);
+
     if (resourceTypeId) formData.append('resource_type_id', resourceTypeId);
+    if (courseOfferingId) formData.append('course_offering_id', courseOfferingId);
+    if (selectedOffering) formData.append('course_id', String(selectedOffering.courseId));
+    if (levelId) formData.append('academic_level_id', levelId);
+    if (sessionId) formData.append('academic_session_id', sessionId);
+    if (semesterId) formData.append('semester_id', semesterId);
+
+    // Append ordered files
+    files.forEach((item) => {
+      formData.append('files', item.file);
+    });
 
     try {
       await adminService.uploadResource(formData);
@@ -342,41 +506,20 @@ function UploadResourceModal({
   };
 
   return (
-    <Dialog open onClose={onClose} title="Upload Learning Material" size="lg">
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <Dialog open onClose={onClose} title="Upload Learning Material" size="xl">
+      <form onSubmit={handleSubmit} className="space-y-6">
         {err && <Alert tone="error">{err}</Alert>}
 
-        <div>
-          <label className="text-xs font-bold text-ink-700 block mb-1">Resource File (Max 50 MB)</label>
-          <input
-            type="file"
-            required
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="w-full text-xs text-ink-600 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100"
-          />
-        </div>
+        {/* SECTION A: ACADEMIC IDENTIFICATION */}
+        <section className="p-4 bg-ink-50 rounded-2xl border border-ink-100 space-y-4">
+          <div className="flex items-center gap-2 pb-2 border-b border-ink-200">
+            <GraduationCap className="h-5 w-5 text-teal-700" />
+            <h3 className="font-display font-bold text-sm text-ink-950 uppercase tracking-wider">
+              Section A: Academic Directory Alignment
+            </h3>
+          </div>
 
-        <Input label="Resource Title" value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="e.g. CSC202 Lecture Notes: Chapter 1-4" />
-        <Input label="Description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Overview of topics covered, references, etc." />
-
-        <div className="grid sm:grid-cols-2 gap-3 pt-2 border-t border-ink-100">
-          <Select label="Resource Type" value={resourceTypeId} onChange={(e) => setResourceTypeId(e.target.value)}>
-            <option value="">Select Resource Type</option>
-            {catalogue?.resource_types.map((t) => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </Select>
-          <Select label="Access Policy" value={accessPolicy} onChange={(e) => setAccessPolicy(e.target.value)}>
-            <option value="subscription_or_entitlement">Subscription or Entitlement Required</option>
-            <option value="entitlement_only">Direct Entitlement Only</option>
-            <option value="public">Public (Free Download)</option>
-          </Select>
-        </div>
-
-        {/* Academic Hierarchy Dependent Selectors */}
-        <div className="p-3 bg-ink-50 rounded-xl space-y-3">
-          <p className="text-xs font-bold uppercase text-ink-600">Academic Hierarchy Alignment</p>
-          <div className="grid sm:grid-cols-2 gap-2.5">
+          <div className="grid sm:grid-cols-3 gap-3">
             <Select
               label="1. Faculty"
               value={facultyId}
@@ -384,7 +527,7 @@ function UploadResourceModal({
                 setFacultyId(e.target.value);
                 setDepartmentId('');
                 setProgrammeId('');
-                setCourseId('');
+                setCourseOfferingId('');
               }}
             >
               <option value="">All faculties</option>
@@ -398,7 +541,7 @@ function UploadResourceModal({
               value={departmentId}
               onChange={(e) => {
                 setDepartmentId(e.target.value);
-                setCourseId('');
+                setCourseOfferingId('');
               }}
             >
               <option value="">All departments</option>
@@ -412,7 +555,7 @@ function UploadResourceModal({
               value={programmeId}
               onChange={(e) => {
                 setProgrammeId(e.target.value);
-                setCourseId('');
+                setCourseOfferingId('');
               }}
             >
               <option value="">All programmes</option>
@@ -422,78 +565,309 @@ function UploadResourceModal({
             </Select>
 
             <Select
-              label="4. Course Unit"
-              value={courseId}
-              onChange={(e) => setCourseId(e.target.value)}
+              label="4. Academic Session"
+              value={sessionId}
+              onChange={(e) => {
+                setSessionId(e.target.value);
+                setCourseOfferingId('');
+              }}
             >
-              <option value="">Select course unit</option>
-              {availableCourses.map((c) => (
-                <option key={c.id} value={c.id}>{c.code} · {c.title}</option>
+              <option value="">Select session</option>
+              {catalogue?.sessions.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </Select>
 
-            <Select label="Level" value={levelId} onChange={(e) => setLevelId(e.target.value)}>
+            <Select
+              label="5. Level"
+              value={levelId}
+              onChange={(e) => {
+                setLevelId(e.target.value);
+                setCourseOfferingId('');
+              }}
+            >
               <option value="">Select level</option>
               {catalogue?.levels.map((l) => (
                 <option key={l.id} value={l.id}>{l.name}</option>
               ))}
             </Select>
 
-            <Select label="Semester" value={semesterId} onChange={(e) => setSemesterId(e.target.value)}>
+            <Select
+              label="6. Semester"
+              value={semesterId}
+              onChange={(e) => {
+                setSemesterId(e.target.value);
+                setCourseOfferingId('');
+              }}
+            >
               <option value="">Select semester</option>
               {catalogue?.semesters.map((s) => (
                 <option key={s.id} value={s.id}>{s.number === 1 ? 'First' : 'Second'} Semester</option>
               ))}
             </Select>
           </div>
-        </div>
 
-        {/* Preview Configuration */}
-        <div className="p-3 border border-ink-200 rounded-xl space-y-2.5">
-          <p className="text-xs font-bold uppercase text-ink-600">Sample Preview Settings</p>
-          <Select
-            label="Preview Policy"
-            value={previewPolicy}
-            onChange={(e) => setPreviewPolicy(e.target.value as typeof previewPolicy)}
+          <div>
+            <Select
+              label="7. Registered Course Offering"
+              value={courseOfferingId}
+              onChange={(e) => setCourseOfferingId(e.target.value)}
+              className="bg-white font-medium"
+            >
+              <option value="">-- Select corresponding Course Offering --</option>
+              {availableOfferings.map((off) => (
+                <option key={off.offeringId} value={off.offeringId}>
+                  {off.courseCode}: {off.courseTitle} ({off.creditUnits ?? 0} Units • {off.levelName} • Sem {off.semesterNumber})
+                </option>
+              ))}
+            </Select>
+          </div>
+
+          {selectedOffering && (
+            <div className="p-3 bg-teal-50/80 rounded-xl border border-teal-200 text-xs text-teal-950 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-teal-700 shrink-0" />
+                <span className="font-semibold">Auto-populated:</span>
+                <span className="font-bold text-teal-900">{selectedOffering.courseCode} — {selectedOffering.courseTitle}</span>
+              </div>
+              <div className="flex items-center gap-2 font-mono text-[11px] text-teal-800">
+                <Badge tone="teal">{selectedOffering.creditUnits ?? 0} Credit Units</Badge>
+                <span>Curriculum: {selectedOffering.curriculumVersion}</span>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* SECTION B: RESOURCE INFORMATION */}
+        <section className="space-y-3.5">
+          <div className="flex items-center gap-2 pb-2 border-b border-ink-100">
+            <FileText className="h-5 w-5 text-teal-700" />
+            <h3 className="font-display font-bold text-sm text-ink-950 uppercase tracking-wider">
+              Section B: Resource Information
+            </h3>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Input
+              label="Resource Title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+              placeholder="e.g. MCB322 Lecture Handout: Bacterial Diversity"
+            />
+            <Select
+              label="Resource Type"
+              value={resourceTypeId}
+              onChange={(e) => setResourceTypeId(e.target.value)}
+            >
+              <option value="">Select Resource Type</option>
+              {catalogue?.resource_types.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </Select>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Input
+              label="Description / Syllabus Notes"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Key concepts covered, textbook chapters, or exam details..."
+            />
+            <Input
+              label="Academic Session / Exam Year"
+              value={examYear}
+              onChange={(e) => setExamYear(e.target.value)}
+              placeholder="e.g. 2025/2026 Session"
+            />
+          </div>
+        </section>
+
+        {/* SECTION C: FILE UPLOAD (MULTI-IMAGE / PDF) */}
+        <section className="space-y-3.5">
+          <div className="flex items-center gap-2 pb-2 border-b border-ink-100">
+            <Upload className="h-5 w-5 text-teal-700" />
+            <h3 className="font-display font-bold text-sm text-ink-950 uppercase tracking-wider">
+              Section C: Document & Image Upload
+            </h3>
+          </div>
+
+          <div
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDragging(false);
+              if (e.dataTransfer.files) addFiles(e.dataTransfer.files);
+            }}
+            className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all ${
+              isDragging ? 'border-teal-500 bg-teal-50/50' : 'border-ink-200 hover:border-teal-400 bg-ink-50/30'
+            }`}
           >
-            <option value="none">No Preview (Protected/Restricted)</option>
-            <option value="public_sample">Public Sample Excerpt (Open to all visitors)</option>
-            <option value="authenticated_only">Preview for Signed-In Students Only</option>
-          </Select>
+            <input
+              type="file"
+              id="resource-files-input"
+              multiple
+              accept=".pdf,image/jpeg,image/png,image/webp"
+              onChange={(e) => { if (e.target.files) addFiles(e.target.files); }}
+              className="hidden"
+            />
+            <div className="flex flex-col items-center justify-center gap-2">
+              <div className="h-10 w-10 rounded-full bg-teal-50 text-teal-700 flex items-center justify-center">
+                <Upload className="h-5 w-5" />
+              </div>
+              <p className="text-xs font-semibold text-ink-900">
+                Drag and drop your PDF or photographed test pages here, or{' '}
+                <label htmlFor="resource-files-input" className="text-teal-700 font-bold cursor-pointer hover:underline">
+                  browse files
+                </label>
+              </p>
+              <p className="text-[11px] text-ink-500">
+                Supported formats: PDF (.pdf), JPEG (.jpg, .jpeg), PNG (.png), WebP (.webp). Max 50 MB.
+              </p>
+            </div>
+          </div>
+
+          {/* List of ordered files */}
+          {files.length > 0 && (
+            <div className="space-y-2 pt-2">
+              <div className="flex items-center justify-between text-xs font-bold text-ink-700 px-1">
+                <span>{files.length} File{files.length === 1 ? '' : 's'} Selected (Series order preserved)</span>
+                <span className="text-ink-500 font-normal">
+                  Total: {(files.reduce((acc, cur) => acc + cur.file.size, 0) / (1024 * 1024)).toFixed(2)} MB
+                </span>
+              </div>
+              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                {files.map((item, idx) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-ink-200 shadow-xs text-xs"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="shrink-0 px-2 py-0.5 rounded font-mono font-bold text-[11px] bg-teal-50 text-teal-800 border border-teal-200">
+                        Page {item.pageOrder}
+                      </span>
+                      <div className="truncate">
+                        <p className="font-semibold text-ink-900 truncate">{item.file.name}</p>
+                        <p className="text-[10px] text-ink-400 font-mono">
+                          {(item.file.size / 1024).toFixed(0)} KB • {item.file.type || 'Document'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => moveFile(idx, 'up')}
+                        disabled={idx === 0}
+                        title="Move Up"
+                        className="p-1 rounded text-ink-500 hover:text-ink-900 hover:bg-ink-100 disabled:opacity-30 disabled:hover:bg-transparent"
+                      >
+                        <ArrowUp className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveFile(idx, 'down')}
+                        disabled={idx === files.length - 1}
+                        title="Move Down"
+                        className="p-1 rounded text-ink-500 hover:text-ink-900 hover:bg-ink-100 disabled:opacity-30 disabled:hover:bg-transparent"
+                      >
+                        <ArrowDown className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeFile(idx)}
+                        title="Remove file"
+                        className="p-1 rounded text-red-500 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* SECTION D: ACCESS AND PUBLICATION */}
+        <section className="space-y-3.5">
+          <div className="flex items-center gap-2 pb-2 border-b border-ink-100">
+            <Lock className="h-5 w-5 text-teal-700" />
+            <h3 className="font-display font-bold text-sm text-ink-950 uppercase tracking-wider">
+              Section D: Access & Publication Control
+            </h3>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Select
+              label="Access Policy"
+              value={accessPolicy}
+              onChange={(e) => setAccessPolicy(e.target.value)}
+            >
+              <option value="subscription_or_entitlement">Subscription or Entitlement Required</option>
+              <option value="entitlement_only">Direct Micro-Entitlement Only (₦300 Pass)</option>
+              <option value="public">Public (Free Download)</option>
+            </Select>
+
+            <Select
+              label="Preview Policy"
+              value={previewPolicy}
+              onChange={(e) => setPreviewPolicy(e.target.value as typeof previewPolicy)}
+            >
+              <option value="none">No Preview (Locked until authorized)</option>
+              <option value="public_sample">Public Sample Excerpt (Open to all)</option>
+              <option value="authenticated_only">Preview for Signed-In Students Only</option>
+            </Select>
+          </div>
 
           {previewPolicy !== 'none' && (
             <div>
               <label className="text-xs font-bold text-ink-700 block mb-1">
-                Approved Sample Excerpt / Notes Summary (Rendered in preview tab)
+                Sample Excerpt / Key Formulas / Notes Summary
               </label>
               <textarea
                 value={previewContent}
                 onChange={(e) => setPreviewContent(e.target.value)}
-                rows={4}
+                rows={3}
                 className="w-full text-xs font-sans rounded-xl border border-ink-200 p-2.5 focus:border-teal-500 focus:outline-none"
-                placeholder="Enter approved sample notes, syllabus outline, or chapter summary to display to students..."
+                placeholder="Enter approved sample notes or excerpt to preview..."
               />
             </div>
           )}
-        </div>
 
-        <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            id="publish-toggle"
-            checked={isPublished}
-            onChange={(e) => setIsPublished(e.target.checked)}
-            className="rounded text-teal-600 focus:ring-teal-500"
-          />
-          <label htmlFor="publish-toggle" className="text-xs font-bold text-ink-800">
-            Publish immediately (visible to students)
-          </label>
-        </div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-ink-50 rounded-xl">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="req-verification"
+                checked={requiresVerification}
+                onChange={(e) => setRequiresVerification(e.target.checked)}
+                className="rounded text-teal-600 focus:ring-teal-500"
+              />
+              <label htmlFor="req-verification" className="text-xs font-bold text-ink-800">
+                Requires Student Verification (Matric / JAMB verified)
+              </label>
+            </div>
 
-        <div className="mt-6 flex justify-end gap-2.5 pt-3 border-t border-ink-100">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="publish-toggle"
+                checked={isPublished}
+                onChange={(e) => setIsPublished(e.target.checked)}
+                className="rounded text-teal-600 focus:ring-teal-500"
+              />
+              <label htmlFor="publish-toggle" className="text-xs font-bold text-ink-800">
+                Publish Immediately (Visible to students)
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <div className="mt-6 flex justify-end gap-2.5 pt-4 border-t border-ink-100">
           <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
           <Button type="submit" loading={uploading} leftIcon={<Upload className="h-4 w-4" />}>
-            Upload Material
+            Upload Learning Material
           </Button>
         </div>
       </form>

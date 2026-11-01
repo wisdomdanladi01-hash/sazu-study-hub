@@ -140,9 +140,8 @@ export function AdminCsvImportPage() {
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
-          className={`border-2 border-dashed rounded-2xl p-8 text-center transition-colors ${
-            dragOver ? 'border-teal-500 bg-teal-50/50' : 'border-ink-200 bg-ink-50/50 hover:border-ink-300'
-          }`}
+          className={`border-2 border-dashed rounded-2xl p-8 text-center transition-colors ${dragOver ? 'border-teal-500 bg-teal-50/50' : 'border-ink-200 bg-ink-50/50 hover:border-ink-300'
+            }`}
         >
           <input
             type="file"

@@ -62,6 +62,18 @@ export interface AdminCourse {
   is_active: boolean;
 }
 
+export interface ResourceFileItem {
+  id: number;
+  resource_id: number;
+  original_filename: string;
+  mime_type: string;
+  file_size_bytes: number;
+  file_checksum_sha256?: string | null;
+  page_order: number;
+  storage_provider: string;
+  created_at: string;
+}
+
 export interface AdminResourceItem {
   id: number;
   title: string;
@@ -69,8 +81,11 @@ export interface AdminResourceItem {
   file_name: string;
   mime_type: string;
   file_size_bytes: number;
+  storage_provider?: string;
+  file_checksum_sha256?: string | null;
   category_id: number | null;
   course_id: number | null;
+  course_offering_id?: number | null;
   academic_level_id: number | null;
   academic_session_id: number | null;
   semester_id: number | null;
@@ -80,6 +95,8 @@ export interface AdminResourceItem {
   preview_policy: 'none' | 'public_sample' | 'authenticated_only';
   preview_content: string | null;
   requires_verification: boolean;
+  files?: ResourceFileItem[];
+  course_offering_ids?: number[];
   created_at: string;
   updated_at: string;
 }
@@ -100,10 +117,10 @@ export const adminService = {
   async listFaculties(): Promise<AdminFaculty[]> {
     return apiRequest<AdminFaculty[]>('/admin/academic/faculties');
   },
-  async createFaculty(data: { code: string; name: string; institution_id?: number }): Promise<AdminFaculty> {
+  async createFaculty(data: { code: string; name: string }): Promise<AdminFaculty> {
     return apiRequest<AdminFaculty>('/admin/academic/faculties', {
       method: 'POST',
-      body: JSON.stringify({ ...data, institution_id: data.institution_id ?? 1 }),
+      body: JSON.stringify(data),
     });
   },
   async updateFaculty(id: number, data: Partial<AdminFaculty>): Promise<AdminFaculty> {
@@ -117,7 +134,7 @@ export const adminService = {
   async listDepartments(): Promise<AdminDepartment[]> {
     return apiRequest<AdminDepartment[]>('/admin/academic/departments');
   },
-  async createDepartment(data: { code: string; name: string; faculty_id?: number | null; programme_id?: number | null; status?: string }): Promise<AdminDepartment> {
+  async createDepartment(data: { code: string; name: string; faculty_id?: number | null; programme_id?: number | null; source_note?: string | null }): Promise<AdminDepartment> {
     return apiRequest<AdminDepartment>('/admin/academic/departments', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -134,7 +151,7 @@ export const adminService = {
   async listProgrammes(): Promise<AdminProgramme[]> {
     return apiRequest<AdminProgramme[]>('/admin/academic/programmes');
   },
-  async createProgramme(data: { code: string; name: string; faculty_id?: number | null; award?: string | null; study_level?: string; status?: string; source_note?: string | null }): Promise<AdminProgramme> {
+  async createProgramme(data: { code: string; name: string; faculty_id?: number | null; award?: string | null; study_level?: string; source_note?: string | null }): Promise<AdminProgramme> {
     return apiRequest<AdminProgramme>('/admin/academic/programmes', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -191,6 +208,9 @@ export const adminService = {
     if (search?.trim()) params.set('search', search.trim());
     return apiRequest<AdminResourceItem[]>(`/admin/resources?${params}`);
   },
+  async listResourceFiles(resourceId: number): Promise<ResourceFileItem[]> {
+    return apiRequest<ResourceFileItem[]>(`/resources/${resourceId}/files`);
+  },
   async uploadResource(formData: FormData): Promise<AdminResourceItem> {
     return apiRequest<AdminResourceItem>('/admin/resources', {
       method: 'POST',
@@ -218,15 +238,15 @@ export const adminService = {
   },
 
   // Verifications
-  async listPendingVerifications(): Promise<VerificationQueueItem[]> {
+  async listVerificationQueue(): Promise<VerificationQueueItem[]> {
     return apiRequest<VerificationQueueItem[]>('/admin/verification/submissions');
   },
-  async listVerificationDocuments(submissionId: number): Promise<VerificationDocument[]> {
+  async getSubmissionDocuments(submissionId: number): Promise<VerificationDocument[]> {
     return apiRequest<VerificationDocument[]>(`/admin/verification/submissions/${submissionId}/documents`);
   },
   async decideVerification(submissionId: number, data: {
-    decision: 'approved' | 'rejected';
-    decision_reason?: string | null;
+    decision: 'verify' | 'reject' | 'request_resubmission';
+    reason?: string;
     verified_level_id?: number | null;
     verified_session_id?: number | null;
   }): Promise<{ id: number; status: string }> {

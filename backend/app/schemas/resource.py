@@ -8,6 +8,20 @@ AccessPolicy = Literal["subscription_or_entitlement", "entitlement_only", "publi
 PreviewPolicy = Literal["none", "public_sample", "authenticated_only"]
 
 
+class ResourceFileResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    resource_id: int
+    original_filename: str
+    mime_type: str
+    file_size_bytes: int
+    file_checksum_sha256: str | None = None
+    page_order: int = 1
+    storage_provider: str = "local_private"
+    created_at: datetime
+
+
 class ResourceResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -15,11 +29,15 @@ class ResourceResponse(BaseModel):
     title: str
     description: str | None
     file_name: str
+    storage_path: str
+    storage_provider: str = "local_private"
     mime_type: str
     file_size_bytes: int
+    file_checksum_sha256: str | None = None
     category_id: int | None
     created_by_id: int | None
     course_id: int | None
+    course_offering_id: int | None = None
     academic_level_id: int | None
     academic_session_id: int | None
     semester_id: int | None
@@ -33,6 +51,8 @@ class ResourceResponse(BaseModel):
     available_until: datetime | None
     created_at: datetime
     updated_at: datetime
+    files: list[ResourceFileResponse] = []
+    course_offering_ids: list[int] = []
 
 
 class ResourcePreviewResponse(BaseModel):
@@ -55,6 +75,7 @@ class ResourceUpdate(BaseModel):
     description: str | None = Field(default=None, max_length=10_000)
     category_id: int | None = Field(default=None, gt=0)
     course_id: int | None = Field(default=None, gt=0)
+    course_offering_id: int | None = Field(default=None, gt=0)
     academic_level_id: int | None = Field(default=None, gt=0)
     academic_session_id: int | None = Field(default=None, gt=0)
     semester_id: int | None = Field(default=None, gt=0)

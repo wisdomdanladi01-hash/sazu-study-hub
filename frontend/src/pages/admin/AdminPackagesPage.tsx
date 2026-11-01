@@ -217,22 +217,20 @@ export function AdminPackagesPage() {
       <div className="flex border-b border-slate-200 gap-6">
         <button
           onClick={() => setActiveTab('packages')}
-          className={`pb-3 text-sm font-semibold border-b-2 flex items-center gap-2 transition ${
-            activeTab === 'packages'
-              ? 'border-emerald-600 text-emerald-700'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
+          className={`pb-3 text-sm font-semibold border-b-2 flex items-center gap-2 transition ${activeTab === 'packages'
+            ? 'border-emerald-600 text-emerald-700'
+            : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
         >
           <CreditCard className="h-4 w-4" />
           Access Packages ({packages.length})
         </button>
         <button
           onClick={() => setActiveTab('payments')}
-          className={`pb-3 text-sm font-semibold border-b-2 flex items-center gap-2 transition ${
-            activeTab === 'payments'
-              ? 'border-emerald-600 text-emerald-700'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
+          className={`pb-3 text-sm font-semibold border-b-2 flex items-center gap-2 transition ${activeTab === 'payments'
+            ? 'border-emerald-600 text-emerald-700'
+            : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
         >
           <Receipt className="h-4 w-4" />
           Live Transactions ({payments.length})
@@ -245,16 +243,14 @@ export function AdminPackagesPage() {
           {packages.map((pkg) => (
             <div
               key={pkg.id}
-              className={`rounded-2xl border p-5 shadow-xs flex flex-col justify-between transition bg-white ${
-                pkg.is_active ? 'border-slate-200' : 'border-slate-200 bg-slate-50/70 opacity-75'
-              }`}
+              className={`rounded-2xl border p-5 shadow-xs flex flex-col justify-between transition bg-white ${pkg.is_active ? 'border-slate-200' : 'border-slate-200 bg-slate-50/70 opacity-75'
+                }`}
             >
               <div>
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                      pkg.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'
-                    }`}
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${pkg.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'
+                      }`}
                   >
                     {pkg.is_active ? 'Active' : 'Archived / Inactive'}
                   </span>
@@ -279,11 +275,10 @@ export function AdminPackagesPage() {
                 <button
                   type="button"
                   onClick={() => handleToggleStatus(pkg)}
-                  className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition ${
-                    pkg.is_active
-                      ? 'border-slate-300 text-slate-700 hover:bg-slate-100'
-                      : 'border-emerald-300 text-emerald-700 hover:bg-emerald-50'
-                  }`}
+                  className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition ${pkg.is_active
+                    ? 'border-slate-300 text-slate-700 hover:bg-slate-100'
+                    : 'border-emerald-300 text-emerald-700 hover:bg-emerald-50'
+                    }`}
                 >
                   {pkg.is_active ? (
                     <>
@@ -339,13 +334,12 @@ export function AdminPackagesPage() {
                       <td className="px-4 py-3 font-bold text-slate-900">{formatNaira(p.amount_minor)}</td>
                       <td className="px-4 py-3">
                         <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold capitalize ${
-                            p.status === 'succeeded'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : p.status === 'failed'
+                          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold capitalize ${p.status === 'succeeded'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : p.status === 'failed'
                               ? 'bg-red-100 text-red-800'
                               : 'bg-amber-100 text-amber-800'
-                          }`}
+                            }`}
                         >
                           {p.status}
                         </span>

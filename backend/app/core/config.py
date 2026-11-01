@@ -67,6 +67,18 @@ class Settings(BaseSettings):
         default=3, alias="VERIFICATION_DOCUMENT_RETENTION_DAYS"
     )
     private_storage_dir: str = Field(default="private_storage", alias="PRIVATE_STORAGE_DIR")
+    blob_read_write_token: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "BLOB_READ_WRITE_TOKEN",
+            "sazu_BLOB_READ_WRITE_TOKEN",
+            "VERCEL_BLOB_TOKEN",
+        ),
+    )
+    storage_provider: str = Field(
+        default="auto",
+        validation_alias=AliasChoices("STORAGE_PROVIDER", "sazu_STORAGE_PROVIDER"),
+    )
     verification_document_max_bytes: int = Field(
         default=10_485_760, alias="VERIFICATION_DOCUMENT_MAX_BYTES"
     )

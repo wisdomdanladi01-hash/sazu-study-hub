@@ -26,6 +26,7 @@ from app.schemas.resource import (
     PreviewPolicy,
     ResourceCategoryCreate,
     ResourceCategoryResponse,
+    ResourceFileResponse,
     ResourcePreviewResponse,
     ResourceResponse,
     ResourceUpdate,
@@ -37,10 +38,13 @@ from app.services.resources import (
     create_resource_category,
     delete_resource,
     get_resource,
+    get_resource_file,
     list_resource_categories,
+    list_resource_files,
     list_resources,
     replace_resource_file,
     resource_download_path,
+    resource_file_download_path,
     resource_is_available,
     update_resource,
 )
@@ -310,6 +314,49 @@ def download_resource(
     )
 
 
+@router.get("/{resource_id}/files", response_model=list[ResourceFileResponse])
+def get_resource_files(
+    resource_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[ResourceFileResponse]:
+    resource = _get_resource_or_404(db, resource_id)
+    is_admin = _is_admin(db, user)
+    if not is_admin and not resource_is_available(resource):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found.")
+    return list_resource_files(db, resource_id)
+
+
+@router.get("/{resource_id}/files/{file_id}/download", response_class=FileResponse)
+def download_resource_file_item(
+    resource_id: int,
+    file_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    resource = _get_resource_or_404(db, resource_id)
+    is_admin = _is_admin(db, user)
+    if not is_admin:
+        if not resource_is_available(resource):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found.")
+        if not can_download_resource(db, user, resource):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this resource.",
+            )
+    try:
+        file_record = get_resource_file(db, resource_id, file_id)
+        path = resource_file_download_path(file_record)
+    except (NotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return FileResponse(
+        path=path,
+        media_type=file_record.mime_type,
+        filename=file_record.original_filename,
+        content_disposition_type="attachment",
+    )
+
+
 @admin_router.get("", response_model=list[ResourceResponse])
 def admin_list_resources(
     search: Annotated[str | None, Query(max_length=100)] = None,
@@ -336,10 +383,12 @@ def admin_list_resources(
 @admin_router.post("", response_model=ResourceResponse, status_code=status.HTTP_201_CREATED)
 def upload_resource(
     title: Annotated[str, Form(min_length=1, max_length=255)],
-    upload: Annotated[UploadFile, File()],
+    upload: Annotated[UploadFile | None, File()] = None,
+    files: Annotated[list[UploadFile] | None, File()] = None,
     description: Annotated[str | None, Form(max_length=10_000)] = None,
     category_id: Annotated[int | None, Form(gt=0)] = None,
     course_id: Annotated[int | None, Form(gt=0)] = None,
+    course_offering_id: Annotated[int | None, Form(gt=0)] = None,
     academic_level_id: Annotated[int | None, Form(gt=0)] = None,
     academic_session_id: Annotated[int | None, Form(gt=0)] = None,
     semester_id: Annotated[int | None, Form(gt=0)] = None,
@@ -358,13 +407,30 @@ def upload_resource(
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ) -> ResourceResponse:
-    content = _read_upload(upload)
+    uploaded_files: list[UploadFile] = []
+    if files:
+        uploaded_files.extend(files)
+    if upload and upload not in uploaded_files:
+        uploaded_files.insert(0, upload)
+
+    if not uploaded_files:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="At least one file or document is required for upload.",
+        )
+
+    file_items: list[tuple[bytes, str, str | None]] = []
     try:
         if not title.strip():
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="title cannot be blank.",
             )
+
+        for up in uploaded_files:
+            c = _read_upload(up)
+            file_items.append((c, up.filename or "unnamed", up.content_type))
+
         resource = create_resource(
             db,
             admin,
@@ -372,6 +438,7 @@ def upload_resource(
             description=description,
             category_id=category_id,
             course_id=course_id,
+            course_offering_id=course_offering_id,
             academic_level_id=academic_level_id,
             academic_session_id=academic_session_id,
             semester_id=semester_id,
@@ -383,16 +450,20 @@ def upload_resource(
             requires_verification=requires_verification,
             available_from=available_from,
             available_until=available_until,
-            original_filename=upload.filename or "",
-            content_type=upload.content_type,
-            content=content,
+            files=file_items,
         )
     except PolicyError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     except ValueError as exc:
-        raise _upload_error(exc, content) from exc
+        # Use first file's content for length check if available
+        first_content = file_items[0][0] if file_items else b""
+        raise _upload_error(exc, first_content) from exc
     finally:
-        upload.file.close()
+        for up in uploaded_files:
+            try:
+                up.file.close()
+            except Exception:
+                pass
     return resource
 
 

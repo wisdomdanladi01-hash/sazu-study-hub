@@ -7,6 +7,7 @@ _RESOURCE_FILE_TYPES = {
     "application/pdf": (".pdf", b"%PDF-"),
     "image/jpeg": (".jpg", b"\xff\xd8\xff"),
     "image/png": (".png", b"\x89PNG\r\n\x1a\n"),
+    "image/webp": (".webp", b"RIFF"),
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": (
         ".docx",
         b"PK\x03\x04",
@@ -26,6 +27,7 @@ _FILE_SIGNATURES = {
     "application/pdf": b"%PDF-",
     "image/jpeg": b"\xff\xd8\xff",
     "image/png": b"\x89PNG\r\n\x1a\n",
+    "image/webp": b"RIFF",
 }
 
 
@@ -56,35 +58,11 @@ def store_verification_document(content: bytes, content_type: str | None) -> tup
 def store_resource_file(
     content: bytes, original_filename: str, content_type: str | None
 ) -> tuple[str, str, str]:
-    file_type = _RESOURCE_FILE_TYPES.get(content_type or "")
-    filename = Path(original_filename.replace("\\", "/")).name
-    if not filename or len(filename) > 255:
-        raise ValueError("A valid filename of at most 255 characters is required.")
-    if not content or len(content) > settings.resource_max_bytes:
-        raise ValueError("The resource is empty or exceeds the configured size limit.")
-    if file_type is None:
-        raise ValueError("Only PDF, DOCX, PPTX, XLSX, JPEG, PNG, and plain-text files are accepted.")
+    from app.core.storage import get_storage_provider
 
-    extension, signature = file_type
-    if Path(filename).suffix.lower() != extension:
-        raise ValueError("The filename extension does not match the declared file type.")
-    if signature is not None and not content.startswith(signature):
-        raise ValueError("The resource content does not match its declared file type.")
-    if content_type == "text/plain":
-        try:
-            content.decode("utf-8")
-        except UnicodeDecodeError as exc:
-            raise ValueError("Plain-text resources must be UTF-8 encoded.") from exc
-
-    storage_key = f"resources/{uuid4().hex}.private"
-    root = private_storage_root()
-    path = (root / storage_key).resolve()
-    if not path.is_relative_to(root):
-        raise ValueError("Invalid private storage key.")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("xb") as resource_file:
-        resource_file.write(content)
-    return storage_key, content_type or "", filename
+    provider = get_storage_provider()
+    obj = provider.store_file(content, original_filename, content_type, subfolder="resources")
+    return obj.storage_key, obj.content_type, obj.original_filename
 
 
 def resolve_private_storage_key(storage_key: str) -> Path:
@@ -96,4 +74,7 @@ def resolve_private_storage_key(storage_key: str) -> Path:
 
 
 def delete_private_storage_key(storage_key: str) -> None:
-    resolve_private_storage_key(storage_key).unlink()
+    from app.core.storage import get_storage_provider
+
+    provider = get_storage_provider()
+    provider.delete_file(storage_key)

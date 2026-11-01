@@ -23,7 +23,12 @@ from app.models.commerce import (
     Payment,
 )
 from app.models.identity import VerificationDocument, VerificationSubmission
-from app.models.resource import Resource, ResourceCategory
+from app.models.resource import (
+    Resource,
+    ResourceCategory,
+    ResourceCourseOffering,
+    ResourceFile,
+)
 from app.models.subscription import Subscription, SubscriptionPlan
 from app.models.user import Role, User
 
@@ -46,6 +51,8 @@ __all__ = [
     "VerificationDocument",
     "Resource",
     "ResourceCategory",
+    "ResourceFile",
+    "ResourceCourseOffering",
     "Subscription",
     "SubscriptionPlan",
     "AccessPackage",

@@ -109,8 +109,7 @@ export function AdminVerificationsPage() {
       });
 
       setSuccessMessage(
-        `Submission #${activeSubmission.id} for Matriculation ${
-          activeSubmission.matriculation_number || 'N/A'
+        `Submission #${activeSubmission.id} for Matriculation ${activeSubmission.matriculation_number || 'N/A'
         } has been ${decisionType}.`,
       );
       handleCloseReview();
@@ -366,11 +365,10 @@ export function AdminVerificationsPage() {
                     <button
                       type="button"
                       onClick={() => setDecisionType('approved')}
-                      className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-sm font-semibold transition ${
-                        decisionType === 'approved'
-                          ? 'border-emerald-600 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-500'
-                          : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                      }`}
+                      className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-sm font-semibold transition ${decisionType === 'approved'
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-500'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                        }`}
                     >
                       <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                       Approve Verification
@@ -378,11 +376,10 @@ export function AdminVerificationsPage() {
                     <button
                       type="button"
                       onClick={() => setDecisionType('rejected')}
-                      className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-sm font-semibold transition ${
-                        decisionType === 'rejected'
-                          ? 'border-red-600 bg-red-50 text-red-800 ring-2 ring-red-500'
-                          : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                      }`}
+                      className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-sm font-semibold transition ${decisionType === 'rejected'
+                        ? 'border-red-600 bg-red-50 text-red-800 ring-2 ring-red-500'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                        }`}
                     >
                       <XCircle className="h-4 w-4 text-red-600" />
                       Reject Verification
@@ -446,11 +443,10 @@ export function AdminVerificationsPage() {
                   <button
                     type="submit"
                     disabled={!decisionType || submittingDecision}
-                    className={`px-4 py-2 text-xs font-semibold rounded-lg shadow-xs text-white transition disabled:opacity-50 ${
-                      decisionType === 'rejected'
-                        ? 'bg-red-600 hover:bg-red-700'
-                        : 'bg-emerald-600 hover:bg-emerald-700'
-                    }`}
+                    className={`px-4 py-2 text-xs font-semibold rounded-lg shadow-xs text-white transition disabled:opacity-50 ${decisionType === 'rejected'
+                      ? 'bg-red-600 hover:bg-red-700'
+                      : 'bg-emerald-600 hover:bg-emerald-700'
+                      }`}
                   >
                     {submittingDecision ? 'Saving...' : 'Confirm Decision'}
                   </button>
