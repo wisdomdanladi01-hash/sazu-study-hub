@@ -67,6 +67,15 @@ class Settings(BaseSettings):
         default=3, alias="VERIFICATION_DOCUMENT_RETENTION_DAYS"
     )
     private_storage_dir: str = Field(default="private_storage", alias="PRIVATE_STORAGE_DIR")
+
+    @field_validator("private_storage_dir", mode="before")
+    @classmethod
+    def default_serverless_storage_dir(cls, v: str | None) -> str:
+        if v and v != "private_storage":
+            return v
+        if os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
+            return "/tmp/private_storage"
+        return v or "private_storage"
     blob_read_write_token: str | None = Field(
         default=None,
         validation_alias=AliasChoices(

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import io
+import os
+import tempfile
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
@@ -122,9 +124,19 @@ class LocalPrivateStorageProvider(StorageProvider):
         return "local_private"
 
     def _root(self) -> Path:
-        root = Path(settings.private_storage_dir).resolve()
-        root.mkdir(parents=True, exist_ok=True)
-        return root
+        target = Path(settings.private_storage_dir)
+        try:
+            root = target.resolve()
+            root.mkdir(parents=True, exist_ok=True)
+            # Verify write permissions
+            probe = root / f".probe_{uuid4().hex}"
+            probe.touch()
+            probe.unlink()
+            return root
+        except OSError:
+            fallback = (Path(tempfile.gettempdir()) / "private_storage").resolve()
+            fallback.mkdir(parents=True, exist_ok=True)
+            return fallback
 
     def store_file(
         self,
@@ -162,9 +174,14 @@ class LocalPrivateStorageProvider(StorageProvider):
     def resolve_local_path(self, storage_key: str) -> Path:
         root = self._root()
         path = (root / storage_key).resolve()
-        if not path.is_relative_to(root) or not path.is_file():
-            raise FileNotFoundError(f"Storage object '{storage_key}' not found.")
-        return path
+        if path.is_relative_to(root) and path.is_file():
+            return path
+        # Check fallback temp root if configured root differs
+        temp_root = (Path(tempfile.gettempdir()) / "private_storage").resolve()
+        fallback_path = (temp_root / storage_key).resolve()
+        if fallback_path.is_relative_to(temp_root) and fallback_path.is_file():
+            return fallback_path
+        raise FileNotFoundError(f"Storage object '{storage_key}' not found.")
 
     def read_file(self, storage_key: str) -> tuple[BinaryIO, int]:
         path = self.resolve_local_path(storage_key)

@@ -32,9 +32,9 @@ _FILE_SIGNATURES = {
 
 
 def private_storage_root() -> Path:
-    root = Path(settings.private_storage_dir).resolve()
-    root.mkdir(parents=True, exist_ok=True)
-    return root
+    from app.core.storage import LocalPrivateStorageProvider
+
+    return LocalPrivateStorageProvider()._root()
 
 
 def store_verification_document(content: bytes, content_type: str | None) -> tuple[str, str]:
