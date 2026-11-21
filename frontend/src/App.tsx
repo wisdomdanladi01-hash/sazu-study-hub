@@ -32,6 +32,7 @@ import { AdminResourcesPage } from '@/pages/admin/AdminResourcesPage';
 import { AdminVerificationsPage } from '@/pages/admin/AdminVerificationsPage';
 import { AdminPackagesPage } from '@/pages/admin/AdminPackagesPage';
 import { AdminAssessmentsPage } from '@/pages/admin/AdminAssessmentsPage';
+import { AdminUsersPage } from '@/pages/admin/AdminUsersPage';
 
 const router = createBrowserRouter([
   {
@@ -78,6 +79,7 @@ const router = createBrowserRouter([
       { path: 'verification', element: <AdminVerificationsPage /> },
       { path: 'packages', element: <AdminPackagesPage /> },
       { path: 'assessments', element: <AdminAssessmentsPage /> },
+      { path: 'users', element: <AdminUsersPage /> },
     ],
   },
   { path: '*', element: <NotFoundPage /> },

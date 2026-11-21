@@ -18,13 +18,13 @@ class AccessPackage(Base):
     __tablename__ = "access_packages"
     __table_args__ = (
         CheckConstraint(
-            "package_type IN ('course', 'resource_package', 'subscription')",
+            "package_type IN ('subscription', 'semester', 'session', 'course', 'resource', 'resource_package')",
             name="ck_access_package_type",
         ),
         CheckConstraint("price_minor >= 0", name="ck_access_package_price_nonnegative"),
         CheckConstraint(
-            "is_active = false OR semester_id IS NOT NULL",
-            name="ck_active_package_has_semester",
+            "is_active = false OR semester_id IS NOT NULL OR academic_session_id IS NOT NULL OR course_id IS NOT NULL OR resource_id IS NOT NULL",
+            name="ck_active_package_target",
         ),
     )
 
@@ -35,6 +35,11 @@ class AccessPackage(Base):
     price_minor: Mapped[int] = mapped_column(Integer, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="NGN", nullable=False)
     semester_id: Mapped[int | None] = mapped_column(ForeignKey("semesters.id"), nullable=True, index=True)
+    academic_session_id: Mapped[int | None] = mapped_column(
+        ForeignKey("academic_sessions.id"), nullable=True, index=True
+    )
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id"), nullable=True, index=True)
+    resource_id: Mapped[int | None] = mapped_column(ForeignKey("resources.id"), nullable=True, index=True)
     available_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     available_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

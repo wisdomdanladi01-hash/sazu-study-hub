@@ -15,17 +15,19 @@ import {
   LogOut,
   ExternalLink,
   ShieldAlert,
+  Users,
 } from 'lucide-react';
 
 const ADMIN_LINKS = [
   { to: '/admin', label: 'Overview', icon: LayoutDashboard, end: true },
-  { to: '/admin/academic', label: 'Academic Directory', icon: GraduationCap },
-  { to: '/admin/courses', label: 'Course Offerings', icon: BookOpen },
-  { to: '/admin/import', label: 'CSV Import', icon: FileSpreadsheet },
-  { to: '/admin/resources', label: 'Learning Resources', icon: FileText },
-  { to: '/admin/assessments', label: 'Practice Tests', icon: ListChecks },
-  { to: '/admin/verification', label: 'Student Verification', icon: UserCheck },
-  { to: '/admin/packages', label: 'Packages & Access', icon: CreditCard },
+  { to: '/admin/academic', label: 'Academic Directory', icon: GraduationCap, capability: 'manage_academic_catalogue' },
+  { to: '/admin/courses', label: 'Course Offerings', icon: BookOpen, capability: 'manage_academic_catalogue' },
+  { to: '/admin/import', label: 'CSV Import', icon: FileSpreadsheet, capability: 'manage_academic_catalogue' },
+  { to: '/admin/resources', label: 'Learning Resources', icon: FileText, capability: 'manage_resources' },
+  { to: '/admin/assessments', label: 'Practice Tests', icon: ListChecks, capability: 'manage_assessments' },
+  { to: '/admin/verification', label: 'Student Verification', icon: UserCheck, capability: 'manage_verifications' },
+  { to: '/admin/packages', label: 'Packages & Access', icon: CreditCard, capability: 'manage_packages' },
+  { to: '/admin/users', label: 'Admin Authorities', icon: Users, capability: 'manage_admins' },
 ];
 
 export function AdminLayout() {
@@ -108,7 +110,11 @@ export function AdminLayout() {
       {/* Main Admin Sub-nav */}
       <div className="bg-white border-b border-ink-100 overflow-x-auto">
         <div className="container-page flex items-center gap-1 py-2">
-          {ADMIN_LINKS.map((item) => (
+          {ADMIN_LINKS.filter((item) => {
+            if (profile?.isSuperuser) return true;
+            if (!item.capability) return true;
+            return profile?.permissions?.includes(item.capability);
+          }).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

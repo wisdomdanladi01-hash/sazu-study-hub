@@ -10,6 +10,8 @@ interface ApiUser {
   is_active: boolean;
   is_admin?: boolean;
   role?: string;
+  permissions?: string[];
+  is_superuser?: boolean;
 }
 
 interface ApiDashboard {
@@ -71,8 +73,10 @@ function mapProfile(user: ApiUser, dashboard: ApiDashboard): StudentProfile {
     },
     hasSubscription: Boolean(subscription?.is_active),
     subscriptionExpiresAt: subscription?.is_active ? subscription.ends_at : null,
-    isAdmin: Boolean(user.is_admin),
+    isAdmin: Boolean(user.is_admin || user.is_superuser),
     role: user.role,
+    permissions: user.permissions || [],
+    isSuperuser: Boolean(user.is_superuser),
   };
 }
 

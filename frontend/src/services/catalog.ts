@@ -30,6 +30,7 @@ interface ApiResource {
   academic_level: { id: number; code: string; name: string } | null;
   semester: { id: number; number: number } | null;
   access_policy: string;
+  is_published?: boolean;
   preview_allowed: boolean;
   preview_policy?: 'none' | 'public_sample' | 'authenticated_only';
   preview_content?: string | null;
@@ -117,6 +118,7 @@ function mapResource(item: ApiResource): CatalogResource {
     previewContent: item.preview_content ?? '',
     previewPolicy: item.preview_policy ?? 'none',
     accessPolicy: item.access_policy,
+    is_published: item.is_published,
     fileSizeBytes: item.file_size_bytes,
     uploadedAt: item.created_at,
     tags: [],

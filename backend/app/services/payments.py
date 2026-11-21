@@ -1,13 +1,14 @@
 from datetime import datetime, time, timedelta, timezone
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.models.academic import Semester, StudentAcademicProfile
+from app.models.academic import AcademicSession, Course, Semester, StudentAcademicProfile
 from app.models.audit import AuditEvent
-from app.models.commerce import AccessPackage, Entitlement, Payment
+from app.models.commerce import AccessPackage, Entitlement, PackageCourse, PackageResource, Payment
+from app.models.resource import Resource
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.schemas.payments import SubscriptionStatus
@@ -18,6 +19,7 @@ from app.services.paystack import (
     initialize_transaction,
     verify_transaction,
 )
+from app.services.resources import find_paid_entitlement
 
 
 class PaymentRejected(Exception):
@@ -31,32 +33,64 @@ def _utc(value: datetime) -> datetime:
 def _package_available(package: AccessPackage, now: datetime) -> bool:
     return (
         package.is_active
-        and package.package_type == "subscription"
         and (package.available_from is None or _utc(package.available_from) <= now)
         and (package.available_until is None or _utc(package.available_until) > now)
     )
 
 
+def get_package_target_name(db: Session, package: AccessPackage) -> str:
+    if package.package_type in ("subscription", "semester") and package.semester_id:
+        sem = db.get(Semester, package.semester_id)
+        if sem:
+            sess = db.get(AcademicSession, sem.academic_session_id)
+            sess_name = sess.name if sess else "Session"
+            return f"{sess_name} - Semester {sem.number}"
+        return f"Semester {package.semester_id}"
+    elif package.package_type == "session" and package.academic_session_id:
+        sess = db.get(AcademicSession, package.academic_session_id)
+        return f"Academic Session {sess.name}" if sess else f"Session {package.academic_session_id}"
+    elif package.package_type == "course" and package.course_id:
+        course = db.get(Course, package.course_id)
+        return f"{course.code} - {course.title}" if course else f"Course {package.course_id}"
+    elif package.package_type in ("resource", "resource_package") and package.resource_id:
+        res = db.get(Resource, package.resource_id)
+        return res.title if res else f"Resource {package.resource_id}"
+    return "All Resources"
+
+
+def get_package_metrics(db: Session, package_id: int) -> tuple[int, int]:
+    result = db.execute(
+        select(
+            func.count(Payment.id),
+            func.coalesce(func.sum(Payment.amount_minor), 0),
+        ).where(Payment.package_id == package_id, Payment.status == "succeeded")
+    ).first()
+    if result:
+        return int(result[0] or 0), int(result[1] or 0)
+    return 0, 0
+
+
 def list_subscription_packages(
     db: Session, *, include_inactive: bool = False
-) -> list[tuple[AccessPackage, Semester]]:
+) -> list[tuple[AccessPackage, Semester | None, str, int, int]]:
     now = datetime.now(timezone.utc)
-    query = (
-        select(AccessPackage, Semester)
-        .join(Semester, Semester.id == AccessPackage.semester_id)
-        .where(AccessPackage.package_type == "subscription")
-        .where(Semester.ends_on >= now.date())
-        .order_by(Semester.starts_on.desc(), AccessPackage.name.asc())
-    )
+    query = select(AccessPackage).order_by(AccessPackage.created_at.desc(), AccessPackage.name.asc())
     if not include_inactive:
         query = query.where(
             AccessPackage.is_active.is_(True),
-            (AccessPackage.available_from.is_(None))
-            | (AccessPackage.available_from <= now),
-            (AccessPackage.available_until.is_(None))
-            | (AccessPackage.available_until > now),
+            (AccessPackage.available_from.is_(None)) | (AccessPackage.available_from <= now),
+            (AccessPackage.available_until.is_(None)) | (AccessPackage.available_until > now),
         )
-    return list(db.execute(query))
+    packages = list(db.scalars(query))
+    results = []
+    for pkg in packages:
+        sem = db.get(Semester, pkg.semester_id) if pkg.semester_id else None
+        if not include_inactive and sem and sem.ends_on < now.date():
+            continue
+        target_name = get_package_target_name(db, pkg)
+        buyers_count, rev = get_package_metrics(db, pkg.id)
+        results.append((pkg, sem, target_name, buyers_count, rev))
+    return results
 
 
 def create_subscription_package(
@@ -67,23 +101,49 @@ def create_subscription_package(
     description: str | None,
     price_minor: int,
     currency: str,
-    semester_id: int,
-    available_from: datetime | None,
-    available_until: datetime | None,
-    is_active: bool,
+    package_type: str = "semester",
+    semester_id: int | None = None,
+    academic_session_id: int | None = None,
+    course_id: int | None = None,
+    resource_id: int | None = None,
+    available_from: datetime | None = None,
+    available_until: datetime | None = None,
+    is_active: bool = False,
 ) -> AccessPackage:
-    semester = db.get(Semester, semester_id)
-    if semester is None:
-        raise PolicyError("The selected semester does not exist.")
     if currency != "NGN":
         raise PolicyError("Paystack subscriptions currently support NGN packages only.")
+    if package_type in ("subscription", "semester"):
+        if not semester_id or db.get(Semester, semester_id) is None:
+            raise PolicyError("The selected semester does not exist.")
+    elif package_type == "session":
+        if not academic_session_id or db.get(AcademicSession, academic_session_id) is None:
+            raise PolicyError("The selected academic session does not exist.")
+    elif package_type == "course":
+        if not course_id or db.get(Course, course_id) is None:
+            raise PolicyError("The selected course does not exist.")
+    elif package_type in ("resource", "resource_package"):
+        if not resource_id or db.get(Resource, resource_id) is None:
+            raise PolicyError("The selected resource does not exist.")
+    else:
+        raise PolicyError(f"Unsupported package type: {package_type}")
+
+    if (
+        available_from is not None
+        and available_until is not None
+        and _utc(available_until) <= _utc(available_from)
+    ):
+        raise PolicyError("available_until must be later than available_from.")
+
     package = AccessPackage(
         name=name.strip(),
         description=description,
-        package_type="subscription",
+        package_type=package_type,
         price_minor=price_minor,
         currency=currency,
         semester_id=semester_id,
+        academic_session_id=academic_session_id,
+        course_id=course_id,
+        resource_id=resource_id,
         available_from=available_from,
         available_until=available_until,
         is_active=is_active,
@@ -91,12 +151,17 @@ def create_subscription_package(
     try:
         db.add(package)
         db.flush()
+        if course_id:
+            db.add(PackageCourse(package_id=package.id, course_id=course_id))
+        if resource_id:
+            db.add(PackageResource(package_id=package.id, resource_id=resource_id))
         db.add(
             AuditEvent(
                 actor_user_id=admin.id,
                 action="admin.subscription_package_created",
                 target_type="access_package",
                 target_id=str(package.id),
+                event_metadata={"package_type": package_type, "price_minor": price_minor},
             )
         )
         db.commit()
@@ -110,9 +175,25 @@ def create_subscription_package(
 def update_subscription_package(
     db: Session, admin: User, package: AccessPackage, changes: dict
 ) -> AccessPackage:
+    effective_type = changes.get("package_type", package.package_type)
     effective_semester_id = changes.get("semester_id", package.semester_id)
-    if effective_semester_id is None or db.get(Semester, effective_semester_id) is None:
-        raise PolicyError("The selected semester does not exist.")
+    effective_session_id = changes.get("academic_session_id", package.academic_session_id)
+    effective_course_id = changes.get("course_id", package.course_id)
+    effective_resource_id = changes.get("resource_id", package.resource_id)
+
+    if effective_type in ("subscription", "semester") and effective_semester_id is not None:
+        if db.get(Semester, effective_semester_id) is None:
+            raise PolicyError("The selected semester does not exist.")
+    elif effective_type == "session" and effective_session_id is not None:
+        if db.get(AcademicSession, effective_session_id) is None:
+            raise PolicyError("The selected academic session does not exist.")
+    elif effective_type == "course" and effective_course_id is not None:
+        if db.get(Course, effective_course_id) is None:
+            raise PolicyError("The selected course does not exist.")
+    elif effective_type in ("resource", "resource_package") and effective_resource_id is not None:
+        if db.get(Resource, effective_resource_id) is None:
+            raise PolicyError("The selected resource does not exist.")
+
     if changes.get("currency", package.currency) != "NGN":
         raise PolicyError("Paystack subscriptions currently support NGN packages only.")
     available_from = changes.get("available_from", package.available_from)
@@ -123,10 +204,31 @@ def update_subscription_package(
         and _utc(available_until) <= _utc(available_from)
     ):
         raise PolicyError("available_until must be later than available_from.")
+
     for field_name, value in changes.items():
-        if field_name == "name":
+        if field_name == "name" and value is not None:
             value = value.strip()
         setattr(package, field_name, value)
+
+    if package.course_id:
+        existing_pc = db.scalar(
+            select(PackageCourse).where(
+                PackageCourse.package_id == package.id,
+                PackageCourse.course_id == package.course_id,
+            )
+        )
+        if not existing_pc:
+            db.add(PackageCourse(package_id=package.id, course_id=package.course_id))
+    if package.resource_id:
+        existing_pr = db.scalar(
+            select(PackageResource).where(
+                PackageResource.package_id == package.id,
+                PackageResource.resource_id == package.resource_id,
+            )
+        )
+        if not existing_pr:
+            db.add(PackageResource(package_id=package.id, resource_id=package.resource_id))
+
     try:
         db.add(
             AuditEvent(
@@ -134,6 +236,7 @@ def update_subscription_package(
                 action="admin.subscription_package_updated",
                 target_type="access_package",
                 target_id=str(package.id),
+                event_metadata=changes,
             )
         )
         db.commit()
@@ -146,7 +249,7 @@ def update_subscription_package(
 
 def get_subscription_package(db: Session, package_id: int) -> AccessPackage:
     package = db.get(AccessPackage, package_id)
-    if package is None or package.package_type != "subscription":
+    if package is None:
         raise NotFoundError("Subscription package not found.")
     return package
 
@@ -192,22 +295,72 @@ def initialize_payment(
         raise PolicyError("This subscription package is not currently available.")
     if not _user_is_verified(db, user.id):
         raise PolicyError("Student verification is required before purchasing a subscription.")
-    if _has_active_subscription(db, user.id, package.semester_id, now):
-        raise ConflictError("You already have an active subscription for this semester.")
-    semester = db.get(Semester, package.semester_id)
-    if semester is None:
-        raise PolicyError("The package semester no longer exists.")
-    semester_end = datetime.combine(
-        semester.ends_on + timedelta(days=1), time.min, tzinfo=timezone.utc
-    )
-    if semester_end <= now:
-        raise PolicyError("This semester has already ended.")
+
+    target_semester_id = package.semester_id
+
+    if package.package_type in ("subscription", "semester"):
+        if package.semester_id is None:
+            raise PolicyError("This package has no semester assigned.")
+        if _has_active_subscription(db, user.id, package.semester_id, now):
+            raise ConflictError("You already have an active subscription for this semester.")
+        semester = db.get(Semester, package.semester_id)
+        if semester is None:
+            raise PolicyError("The package semester no longer exists.")
+        semester_end = datetime.combine(
+            semester.ends_on + timedelta(days=1), time.min, tzinfo=timezone.utc
+        )
+        if semester_end <= now:
+            raise PolicyError("This semester has already ended.")
+
+    elif package.package_type == "session":
+        if package.academic_session_id is None:
+            raise PolicyError("This package has no academic session assigned.")
+        session_obj = db.get(AcademicSession, package.academic_session_id)
+        if session_obj is None:
+            raise PolicyError("The package academic session no longer exists.")
+        session_end = datetime.combine(
+            session_obj.ends_on + timedelta(days=1), time.min, tzinfo=timezone.utc
+        )
+        if session_end <= now:
+            raise PolicyError("This academic session has already ended.")
+        has_session = db.scalar(
+            select(Entitlement.id)
+            .join(Payment, Payment.id == Entitlement.payment_id)
+            .where(
+                Entitlement.user_id == user.id,
+                Entitlement.package_id == package.id,
+                Entitlement.status == "active",
+                Payment.status == "succeeded",
+                or_(Entitlement.expires_at.is_(None), Entitlement.expires_at > now),
+            )
+            .limit(1)
+        )
+        if has_session is not None:
+            raise ConflictError("You already have an active pass for this academic session.")
+
+    elif package.package_type == "course":
+        if package.course_id is None:
+            raise PolicyError("This package has no course assigned.")
+        paid_ent = find_paid_entitlement(
+            db, user, resource_id=None, course_id=package.course_id, semester_id=None
+        )
+        if paid_ent is not None:
+            raise ConflictError("You already have an active pass for this course.")
+
+    elif package.package_type in ("resource", "resource_package"):
+        if package.resource_id is None:
+            raise PolicyError("This package has no resource assigned.")
+        paid_ent = find_paid_entitlement(
+            db, user, resource_id=package.resource_id, course_id=None, semester_id=None
+        )
+        if paid_ent is not None:
+            raise ConflictError("You already have an active pass for this resource.")
 
     reference = f"LRP-{uuid4().hex}"
     payment = Payment(
         user_id=user.id,
         package_id=package.id,
-        semester_id=package.semester_id,
+        semester_id=target_semester_id,
         provider="paystack",
         provider_reference=reference,
         idempotency_key=reference,
@@ -224,6 +377,7 @@ def initialize_payment(
                 action="student.subscription_payment_initialized",
                 target_type="payment",
                 target_id=str(payment.id),
+                event_metadata={"package_id": package.id, "package_type": package.package_type},
             )
         )
         db.commit()
@@ -343,32 +497,8 @@ def verify_payment(
         db.refresh(payment)
         return payment, None
 
-    semester = db.get(Semester, payment.semester_id) if payment.semester_id else None
-    if semester is None:
-        payment.status = "succeeded"
-        payment.verified_at = now
-        payment.refund_review_status = "pending"
-        payment.failure_reason = "Verified payment has no valid semester; manual reconciliation is required."
-        db.commit()
-        return payment, None
-
-    ends_at = datetime.combine(
-        semester.ends_on + timedelta(days=1), time.min, tzinfo=timezone.utc
-    )
-    starts_at = max(
-        now,
-        datetime.combine(semester.starts_on, time.min, tzinfo=timezone.utc),
-    )
-    if ends_at <= starts_at:
-        payment.status = "succeeded"
-        payment.verified_at = now
-        payment.refund_review_status = "pending"
-        payment.failure_reason = "Verified payment arrived after semester access ended; manual reconciliation is required."
-        db.commit()
-        return payment, None
-
     package = db.get(AccessPackage, payment.package_id) if payment.package_id else None
-    if package is None or package.package_type != "subscription":
+    if package is None:
         payment.status = "succeeded"
         payment.verified_at = now
         payment.refund_review_status = "pending"
@@ -376,68 +506,219 @@ def verify_payment(
         db.commit()
         return payment, None
 
-    if _has_active_subscription(db, payment.user_id, payment.semester_id, now):
-        payment.status = "succeeded"
-        payment.verified_at = now
-        payment.refund_review_status = "pending"
-        payment.failure_reason = (
-            "Payment succeeded while another semester subscription was active; "
-            "no duplicate access was granted and manual refund review is required."
-        )
-        db.commit()
-        return payment, None
+    pkg_type = package.package_type
+    primary_subscription = None
 
-    subscription = Subscription(
-        user_id=payment.user_id,
-        plan_id=None,
-        package_id=package.id,
-        semester_id=payment.semester_id,
-        starts_at=starts_at,
-        ends_at=ends_at,
-        is_active=True,
-        status="active",
-    )
-    try:
-        db.add(subscription)
-        db.flush()
-        payment.subscription_id = subscription.id
-        payment.status = "succeeded"
-        payment.verified_at = now
-        payment.provider_status = transaction.status
-        payment.failure_reason = None
+    if pkg_type in ("subscription", "semester"):
+        semester = db.get(Semester, payment.semester_id or package.semester_id)
+        if semester is None:
+            payment.status = "succeeded"
+            payment.verified_at = now
+            payment.refund_review_status = "pending"
+            payment.failure_reason = "Verified payment has no valid semester; manual reconciliation is required."
+            db.commit()
+            return payment, None
+
+        ends_at = datetime.combine(
+            semester.ends_on + timedelta(days=1), time.min, tzinfo=timezone.utc
+        )
+        starts_at = max(
+            now,
+            datetime.combine(semester.starts_on, time.min, tzinfo=timezone.utc),
+        )
+        if ends_at <= starts_at:
+            payment.status = "succeeded"
+            payment.verified_at = now
+            payment.refund_review_status = "pending"
+            payment.failure_reason = "Verified payment arrived after semester access ended; manual reconciliation is required."
+            db.commit()
+            return payment, None
+
+        if _has_active_subscription(db, payment.user_id, semester.id, now):
+            payment.status = "succeeded"
+            payment.verified_at = now
+            payment.refund_review_status = "pending"
+            payment.failure_reason = (
+                "Payment succeeded while another semester subscription was active; "
+                "no duplicate access was granted and manual refund review is required."
+            )
+            db.commit()
+            return payment, None
+
+        subscription = Subscription(
+            user_id=payment.user_id,
+            plan_id=None,
+            package_id=package.id,
+            semester_id=semester.id,
+            starts_at=starts_at,
+            ends_at=ends_at,
+            is_active=True,
+            status="active",
+        )
+        try:
+            db.add(subscription)
+            db.flush()
+            payment.subscription_id = subscription.id
+            primary_subscription = subscription
+            db.add(
+                Entitlement(
+                    user_id=payment.user_id,
+                    payment_id=payment.id,
+                    subscription_id=subscription.id,
+                    package_id=package.id,
+                    scope_key=f"subscription:{subscription.id}",
+                    expires_at=ends_at,
+                    status="active",
+                )
+            )
+        except IntegrityError as exc:
+            db.rollback()
+            raise ConflictError(
+                "The subscription could not be activated because an equivalent record already exists."
+            ) from exc
+
+    elif pkg_type == "session":
+        session_obj = db.get(AcademicSession, package.academic_session_id)
+        if session_obj is None:
+            payment.status = "succeeded"
+            payment.verified_at = now
+            payment.refund_review_status = "pending"
+            payment.failure_reason = "Verified payment has no valid academic session; manual reconciliation is required."
+            db.commit()
+            return payment, None
+
+        session_end = datetime.combine(session_obj.ends_on + timedelta(days=1), time.min, tzinfo=timezone.utc)
+        semesters = list(
+            db.scalars(
+                select(Semester)
+                .where(Semester.academic_session_id == session_obj.id)
+                .order_by(Semester.number.asc())
+            )
+        )
+        for sem in semesters:
+            sem_end = datetime.combine(sem.ends_on + timedelta(days=1), time.min, tzinfo=timezone.utc)
+            if sem_end > now and not _has_active_subscription(db, payment.user_id, sem.id, now):
+                sem_start = max(now, datetime.combine(sem.starts_on, time.min, tzinfo=timezone.utc))
+                sub = Subscription(
+                    user_id=payment.user_id,
+                    plan_id=None,
+                    package_id=package.id,
+                    semester_id=sem.id,
+                    starts_at=sem_start,
+                    ends_at=sem_end,
+                    is_active=True,
+                    status="active",
+                )
+                db.add(sub)
+                db.flush()
+                if primary_subscription is None:
+                    primary_subscription = sub
+                    payment.subscription_id = sub.id
+                db.add(
+                    Entitlement(
+                        user_id=payment.user_id,
+                        payment_id=payment.id,
+                        subscription_id=sub.id,
+                        package_id=package.id,
+                        scope_key=f"subscription:{sub.id}",
+                        expires_at=sem_end,
+                        status="active",
+                    )
+                )
+
         db.add(
             Entitlement(
                 user_id=payment.user_id,
                 payment_id=payment.id,
-                subscription_id=subscription.id,
                 package_id=package.id,
-                scope_key=f"subscription:{subscription.id}",
-                expires_at=ends_at,
+                scope_key=f"session:{session_obj.id}:{payment.id}",
+                expires_at=session_end,
                 status="active",
             )
         )
+
+    elif pkg_type == "course":
+        course = db.get(Course, package.course_id)
+        if course is None:
+            payment.status = "succeeded"
+            payment.verified_at = now
+            payment.refund_review_status = "pending"
+            payment.failure_reason = "Verified payment has no valid course; manual reconciliation is required."
+            db.commit()
+            return payment, None
+
+        course_expires = now + timedelta(days=365)
         db.add(
-            AuditEvent(
-                actor_user_id=payment.user_id,
-                action="student.subscription_activated",
-                target_type="subscription",
-                target_id=str(subscription.id),
-                event_metadata={
-                    "payment_id": payment.id,
-                    "package_id": package.id,
-                    "semester_id": payment.semester_id,
-                },
+            Entitlement(
+                user_id=payment.user_id,
+                payment_id=payment.id,
+                package_id=package.id,
+                course_id=course.id,
+                scope_key=f"course:{course.id}:{payment.id}",
+                expires_at=course_expires,
+                status="active",
             )
         )
-        db.commit()
-        db.refresh(payment)
-        db.refresh(subscription)
-        return payment, subscription
-    except IntegrityError as exc:
-        db.rollback()
-        raise ConflictError(
-            "The subscription could not be activated because an equivalent record already exists."
-        ) from exc
+        pc = db.scalar(
+            select(PackageCourse).where(
+                PackageCourse.package_id == package.id, PackageCourse.course_id == course.id
+            )
+        )
+        if not pc:
+            db.add(PackageCourse(package_id=package.id, course_id=course.id))
+
+    elif pkg_type in ("resource", "resource_package"):
+        res = db.get(Resource, package.resource_id)
+        if res is None:
+            payment.status = "succeeded"
+            payment.verified_at = now
+            payment.refund_review_status = "pending"
+            payment.failure_reason = "Verified payment has no valid resource; manual reconciliation is required."
+            db.commit()
+            return payment, None
+
+        res_expires = now + timedelta(days=365)
+        db.add(
+            Entitlement(
+                user_id=payment.user_id,
+                payment_id=payment.id,
+                package_id=package.id,
+                resource_id=res.id,
+                scope_key=f"resource:{res.id}:{payment.id}",
+                expires_at=res_expires,
+                status="active",
+            )
+        )
+        pr = db.scalar(
+            select(PackageResource).where(
+                PackageResource.package_id == package.id, PackageResource.resource_id == res.id
+            )
+        )
+        if not pr:
+            db.add(PackageResource(package_id=package.id, resource_id=res.id))
+
+    payment.status = "succeeded"
+    payment.verified_at = now
+    payment.provider_status = transaction.status
+    payment.failure_reason = None
+    db.add(
+        AuditEvent(
+            actor_user_id=payment.user_id,
+            action="student.subscription_activated",
+            target_type="access_package",
+            target_id=str(package.id),
+            event_metadata={
+                "payment_id": payment.id,
+                "package_id": package.id,
+                "package_type": pkg_type,
+            },
+        )
+    )
+    db.commit()
+    db.refresh(payment)
+    if primary_subscription is not None:
+        db.refresh(primary_subscription)
+    return payment, primary_subscription
 
 
 def get_user_subscriptions(db: Session, user_id: int) -> list[Subscription]:

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { adminService, type AdminResourceItem } from '@/services/admin';
 import { catalogService } from '@/services/catalog';
 import type { AcademicCatalogue } from '@/types';
@@ -27,6 +28,7 @@ import {
   Calendar,
   Lock,
   ExternalLink,
+  Eye,
 } from 'lucide-react';
 import { formatDate } from '@/utils/format';
 
@@ -145,6 +147,7 @@ export function AdminResourcesPage() {
                   <th className="px-4 py-3">Resource Title</th>
                   <th className="px-4 py-3">File / Storage</th>
                   <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Viewer Status</th>
                   <th className="px-4 py-3">Access Policy</th>
                   <th className="px-4 py-3">Preview Policy</th>
                   <th className="px-4 py-3">Uploaded</th>
@@ -152,80 +155,99 @@ export function AdminResourcesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-ink-100">
-                {resources.map((r) => (
-                  <tr key={r.id} className="hover:bg-ink-50/50">
-                    <td className="px-4 py-3">
-                      <p className="font-semibold text-ink-900">{r.title}</p>
-                      {r.description && <p className="text-xs text-ink-500 line-clamp-1">{r.description}</p>}
-                      {r.course_offering_id && (
-                        <span className="inline-block mt-1 text-[11px] font-mono text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
-                          Offering #{r.course_offering_id}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-ink-600 whitespace-nowrap">
-                      <p className="font-mono">{r.file_name}</p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-ink-400">{(r.file_size_bytes / 1024).toFixed(0)} KB</span>
-                        <span className="text-ink-300">•</span>
-                        <Badge tone={r.storage_provider === 'vercel_blob' ? 'teal' : 'neutral'} className="text-[10px] py-0 px-1.5">
-                          {r.storage_provider === 'vercel_blob' ? 'Vercel Blob' : 'Local Storage'}
+                {resources.map((r) => {
+                  const isViewerReady = r.mime_type === 'application/pdf' || r.mime_type.startsWith('image/');
+                  return (
+                    <tr key={r.id} className="hover:bg-ink-50/50">
+                      <td className="px-4 py-3">
+                        <p className="font-semibold text-ink-900">{r.title}</p>
+                        {r.description && <p className="text-xs text-ink-500 line-clamp-1">{r.description}</p>}
+                        {r.course_offering_id && (
+                          <span className="inline-block mt-1 text-[11px] font-mono text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
+                            Offering #{r.course_offering_id}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-ink-600 whitespace-nowrap">
+                        <p className="font-mono">{r.file_name}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-ink-400">{(r.file_size_bytes / 1024).toFixed(0)} KB</span>
+                          <span className="text-ink-300">•</span>
+                          <Badge tone={r.storage_provider === 'vercel_blob' ? 'teal' : 'neutral'} className="text-[10px] py-0 px-1.5">
+                            {r.storage_provider === 'vercel_blob' ? 'Vercel Blob' : 'Local Storage'}
+                          </Badge>
+                        </div>
+                        {r.files && r.files.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setViewFilesItem(r)}
+                            className="mt-1 text-[11px] font-semibold text-teal-700 hover:text-teal-900 flex items-center gap-1"
+                          >
+                            <Layers className="h-3 w-3" /> {r.files.length} Pages (Series)
+                          </button>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge tone={r.is_published ? 'green' : 'neutral'}>
+                          {r.is_published ? 'Published' : 'Draft'}
                         </Badge>
-                      </div>
-                      {r.files && r.files.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => setViewFilesItem(r)}
-                          className="mt-1 text-[11px] font-semibold text-teal-700 hover:text-teal-900 flex items-center gap-1"
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge tone={isViewerReady ? 'teal' : 'amber'}>
+                          {isViewerReady ? 'Viewer Ready' : 'Needs re-upload as PDF'}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        <Badge tone={r.access_policy === 'public' ? 'green' : 'neutral'}>
+                          {r.access_policy === 'public' ? 'Public' : 'Protected'}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        <Badge tone={r.preview_policy === 'public_sample' ? 'teal' : r.preview_policy === 'authenticated_only' ? 'amber' : 'neutral'}>
+                          {r.preview_policy === 'public_sample' ? 'Sample Excerpt' : r.preview_policy === 'authenticated_only' ? 'Auth Preview' : 'No Preview'}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-ink-500 whitespace-nowrap">
+                        {formatDate(r.created_at)}
+                      </td>
+                      <td className="px-4 py-3 text-right space-x-1 whitespace-nowrap">
+                        <Link to={`/materials/${r.id}/read`} target="_blank" rel="noreferrer">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-teal-700 hover:text-teal-900"
+                            leftIcon={<Eye className="h-3.5 w-3.5" />}
+                            title="Open in secure watermarked viewer (preview as student)"
+                          >
+                            Preview as student
+                          </Button>
+                        </Link>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setReplacingFileId(r.id);
+                            fileInputRef.current?.click();
+                          }}
+                          title="Replace primary file bytes"
                         >
-                          <Layers className="h-3 w-3" /> {r.files.length} Pages (Series)
-                        </button>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge tone={r.is_published ? 'green' : 'neutral'}>
-                        {r.is_published ? 'Published' : 'Draft'}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-xs">
-                      <Badge tone={r.access_policy === 'public' ? 'green' : 'neutral'}>
-                        {r.access_policy === 'public' ? 'Public' : 'Protected'}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-xs">
-                      <Badge tone={r.preview_policy === 'public_sample' ? 'teal' : r.preview_policy === 'authenticated_only' ? 'amber' : 'neutral'}>
-                        {r.preview_policy === 'public_sample' ? 'Sample Excerpt' : r.preview_policy === 'authenticated_only' ? 'Auth Preview' : 'No Preview'}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-ink-500 whitespace-nowrap">
-                      {formatDate(r.created_at)}
-                    </td>
-                    <td className="px-4 py-3 text-right space-x-1 whitespace-nowrap">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setReplacingFileId(r.id);
-                          fileInputRef.current?.click();
-                        }}
-                        title="Replace primary file bytes"
-                      >
-                        Replace file
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => setEditModalItem(r)} leftIcon={<Edit2 className="h-3.5 w-3.5" />}>
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        onClick={() => setDeleteModalItem(r)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
+                          Replace file
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setEditModalItem(r)} leftIcon={<Edit2 className="h-3.5 w-3.5" />}>
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => setDeleteModalItem(r)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -965,9 +987,27 @@ function EditResourceModal({
           </label>
         </div>
 
-        <div className="mt-6 flex justify-end gap-2.5 pt-3 border-t border-ink-100">
-          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-          <Button type="submit" loading={saving}>Save changes</Button>
+        <div className="mt-6 flex items-center justify-between gap-2.5 pt-3 border-t border-ink-100">
+          <Link
+            to={`/materials/${item.id}/read`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex"
+          >
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              leftIcon={<ExternalLink className="h-3.5 w-3.5" />}
+              title="Open in secure watermarked viewer (preview as student)"
+            >
+              Preview as student
+            </Button>
+          </Link>
+          <div className="flex items-center gap-2.5">
+            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="submit" loading={saving}>Save changes</Button>
+          </div>
         </div>
       </form>
     </Dialog>

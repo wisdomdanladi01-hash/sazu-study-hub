@@ -75,7 +75,46 @@ class UserResponse(BaseModel):
     full_name: str
     is_active: bool
     is_admin: bool = False
+    is_superuser: bool = False
     role: str | None = None
+    permissions: list[str] = []
+
+
+class RoleResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    description: str | None
+
+
+class AdminUserCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: EmailStr
+    full_name: str = Field(min_length=2, max_length=255)
+    password: str = Field(min_length=12, max_length=256)
+    role_name: str = "content_admin"
+    is_superuser: bool = False
+
+
+class AdminRoleUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role_name: str | None = None
+    is_superuser: bool | None = None
+    is_active: bool | None = None
+
+
+class AdminUserResponse(BaseModel):
+    id: int
+    email: str
+    full_name: str
+    is_active: bool
+    is_superuser: bool
+    role: str | None
+    permissions: list[str] = []
+    created_at: str
 
 
 class UserProfileUpdate(BaseModel):

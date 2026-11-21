@@ -47,14 +47,81 @@ def get_current_user(
     return user
 
 
+ROLE_CAPABILITIES: dict[str, set[str]] = {
+    "super_admin": {
+        "manage_admins",
+        "manage_resources",
+        "preview_resources",
+        "manage_assessments",
+        "manage_academic_catalogue",
+        "manage_packages",
+        "view_payments",
+        "review_refunds",
+        "manage_verifications",
+    },
+    "admin": {
+        "manage_admins",
+        "manage_resources",
+        "preview_resources",
+        "manage_assessments",
+        "manage_academic_catalogue",
+        "manage_packages",
+        "view_payments",
+        "review_refunds",
+        "manage_verifications",
+    },
+    "content_admin": {
+        "manage_resources",
+        "preview_resources",
+        "manage_assessments",
+        "manage_academic_catalogue",
+    },
+    "finance_admin": {
+        "manage_packages",
+        "view_payments",
+        "review_refunds",
+    },
+    "verification_officer": {
+        "manage_verifications",
+    },
+}
+
+ALL_CAPABILITIES: set[str] = set.union(*ROLE_CAPABILITIES.values())
+
+
+def get_user_capabilities(user: User, db: Session) -> set[str]:
+    if user.is_superuser:
+        return set(ALL_CAPABILITIES)
+    if not user.role_id:
+        return set()
+    role = db.get(Role, user.role_id)
+    if not role:
+        return set()
+    return set(ROLE_CAPABILITIES.get(role.name, set()))
+
+
+def require_capability(capability: str):
+    def dependency(
+        user: Annotated[User, Depends(get_current_user)],
+        db: Annotated[Session, Depends(get_db)],
+    ) -> User:
+        caps = get_user_capabilities(user, db)
+        if capability not in caps:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Administrator capability '{capability}' is required.",
+            )
+        return user
+
+    return dependency
+
+
 def get_current_admin(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> User:
-    is_admin = user.is_superuser or db.scalar(
-        select(Role.id).where(Role.id == user.role_id, Role.name == "admin")
-    ) is not None
-    if not is_admin:
+    caps = get_user_capabilities(user, db)
+    if not caps and not user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Administrator access is required.",

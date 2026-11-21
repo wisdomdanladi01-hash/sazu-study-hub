@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -247,3 +248,85 @@ class CourseOfferingImportResponse(BaseModel):
     updated_courses: int
     created_offerings: int
     updated_offerings: int
+
+
+class SemesterCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    academic_session_id: int = Field(gt=0)
+    number: int = Field(ge=1, le=2)
+    starts_on: date
+    ends_on: date
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> "SemesterCreate":
+        if self.ends_on <= self.starts_on:
+            raise ValueError("ends_on must be later than starts_on.")
+        return self
+
+
+class SemesterUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    academic_session_id: int | None = Field(default=None, gt=0)
+    number: int | None = Field(default=None, ge=1, le=2)
+    starts_on: date | None = None
+    ends_on: date | None = None
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> "SemesterUpdate":
+        if self.starts_on and self.ends_on and self.ends_on <= self.starts_on:
+            raise ValueError("ends_on must be later than starts_on.")
+        return self
+
+
+class SemesterResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    academic_session_id: int
+    number: int
+    starts_on: date
+    ends_on: date
+
+
+class AcademicSessionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=30)
+    starts_on: date
+    ends_on: date
+    is_active: bool = False
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> "AcademicSessionCreate":
+        if self.ends_on <= self.starts_on:
+            raise ValueError("ends_on must be later than starts_on.")
+        return self
+
+
+class AcademicSessionUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=30)
+    starts_on: date | None = None
+    ends_on: date | None = None
+    is_active: bool | None = None
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> "AcademicSessionUpdate":
+        if self.starts_on and self.ends_on and self.ends_on <= self.starts_on:
+            raise ValueError("ends_on must be later than starts_on.")
+        return self
+
+
+class AcademicSessionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    starts_on: date
+    ends_on: date
+    is_active: bool
+    semesters: list[SemesterResponse] = []
+

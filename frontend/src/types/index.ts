@@ -44,6 +44,7 @@ export interface Resource {
   previewContent: string;
   previewPolicy?: 'none' | 'public_sample' | 'authenticated_only';
   accessPolicy?: string;
+  is_published?: boolean;
   pages?: number;
   fileSizeBytes?: number;
   uploadedAt: string;
@@ -82,6 +83,8 @@ export interface StudentProfile {
   subscriptionExpiresAt: string | null;
   isAdmin: boolean;
   role?: string;
+  permissions?: string[];
+  isSuperuser?: boolean;
 }
 
 export interface AcademicCatalogue {

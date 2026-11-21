@@ -439,6 +439,13 @@ def assessment_lock_reason(db: Session, user: User | None, config: AssessmentCon
     found = find_paid_entitlement(
         db, user, resource_id=None, course_id=config.course_id, semester_id=config.semester_id
     )
+    if found is None and config.resource_links:
+        for link in config.resource_links:
+            found = find_paid_entitlement(
+                db, user, resource_id=link.resource_id, course_id=None, semester_id=None
+            )
+            if found is not None:
+                break
     return None if found is not None else "subscription_required"
 
 

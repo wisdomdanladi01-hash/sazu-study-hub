@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from app.api.routes.health import router as health_router
 from app.api.routes.assessments import admin_router as assessments_admin_router
 from app.api.routes.assessments import router as assessments_router
+from app.api.routes.auth import admin_router as auth_admin_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.academic_admin import router as academic_admin_router
 from app.api.routes.payments import admin_router as payments_admin_router
@@ -62,6 +63,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 app.include_router(health_router, prefix=settings.api_v1_str)
 app.include_router(auth_router, prefix=settings.api_v1_str)
+app.include_router(auth_admin_router, prefix=settings.api_v1_str)
 app.include_router(student_portal_router, prefix=settings.api_v1_str)
 app.include_router(academic_admin_router, prefix=settings.api_v1_str)
 app.include_router(verification_router, prefix=settings.api_v1_str)
