@@ -129,3 +129,24 @@ class ResourceCategoryResponse(BaseModel):
     name: str
     description: str | None
     created_at: datetime
+
+
+class ViewerPage(BaseModel):
+    number: int
+    kind: Literal["image", "text"]
+
+
+class ViewerManifest(BaseModel):
+    user_id: int
+    resource_id: int
+    title: str
+    version: str
+    viewable: bool
+    message: str | None = None
+    page_count: int
+    pages: list[ViewerPage]
+    access_expires_at: datetime | None = None
+    offline_allowed: bool
+    offline_expires_at: datetime | None = None
+    downloads_enabled: bool
+    watermark: str

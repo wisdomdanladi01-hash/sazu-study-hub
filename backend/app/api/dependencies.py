@@ -60,3 +60,18 @@ def get_current_admin(
             detail="Administrator access is required.",
         )
     return user
+
+
+def get_optional_user(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+    db: Annotated[Session, Depends(get_db)],
+) -> User | None:
+    """Return the signed-in user, or None for anonymous or invalid tokens."""
+    if credentials is None:
+        return None
+    try:
+        user_id = decode_access_token(credentials.credentials)
+        user = db.get(User, user_id)
+    except Exception:
+        return None
+    return user if user is not None and user.is_active else None

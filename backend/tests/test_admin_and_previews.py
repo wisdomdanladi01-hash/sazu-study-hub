@@ -90,7 +90,7 @@ def test_resource_preview_policy_flow(client, db_session):
 
     # Streaming file via preview endpoint must be denied because it's restricted
     file_resp = client.get(f"/api/v1/resources/{res_id}/preview/file")
-    assert file_resp.status_code == 403
+    assert file_resp.status_code in (401, 403)  # anonymous callers are asked to sign in
 
     # 2. Update resource to preview_policy="authenticated_only" with sample excerpt
     patch_resp = client.patch(

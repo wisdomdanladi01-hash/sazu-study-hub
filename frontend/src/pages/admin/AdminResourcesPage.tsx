@@ -506,7 +506,7 @@ function UploadResourceModal({
   };
 
   return (
-    <Dialog open onClose={onClose} title="Upload Learning Material" size="xl">
+    <Dialog open onClose={onClose} title="Upload Learning Material" size="lg">
       <form onSubmit={handleSubmit} className="space-y-6">
         {err && <Alert tone="error">{err}</Alert>}
 

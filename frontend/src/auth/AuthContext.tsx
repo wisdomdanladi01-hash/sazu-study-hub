@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { AcademicProfile, StudentProfile } from '@/types';
 import { apiRequest, getAccessToken, setAccessToken } from '@/services/api';
+import { offlineStore } from '@/services/offline';
 
 interface ApiUser {
   id: number;
@@ -174,6 +175,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(() => {
     setAccessToken(null);
+    // Shared devices must not keep the previous student's offline copies.
+    void offlineStore.purgeAll().catch(() => undefined);
     setState({ profile: null, token: null, isLoading: false, authError: null });
   }, []);
 

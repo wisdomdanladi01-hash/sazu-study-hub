@@ -9,6 +9,7 @@ import {
   BookOpen,
   FileSpreadsheet,
   FileText,
+  ListChecks,
   UserCheck,
   CreditCard,
   LogOut,
@@ -22,6 +23,7 @@ const ADMIN_LINKS = [
   { to: '/admin/courses', label: 'Course Offerings', icon: BookOpen },
   { to: '/admin/import', label: 'CSV Import', icon: FileSpreadsheet },
   { to: '/admin/resources', label: 'Learning Resources', icon: FileText },
+  { to: '/admin/assessments', label: 'Practice Tests', icon: ListChecks },
   { to: '/admin/verification', label: 'Student Verification', icon: UserCheck },
   { to: '/admin/packages', label: 'Packages & Access', icon: CreditCard },
 ];

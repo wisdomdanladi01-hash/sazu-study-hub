@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -419,66 +420,119 @@ def create_resource_category(
         raise ConflictError("A resource category with this name already exists.") from exc
 
 
-def can_download_resource(db: Session, user: User, resource: Resource) -> bool:
-    now = datetime.now(timezone.utc)
-    if resource.requires_verification:
-        verified = db.scalar(
+@dataclass(frozen=True)
+class AccessDecision:
+    """Result of an access check. ``expires_at`` is None when access has no end date."""
+
+    allowed: bool
+    expires_at: datetime | None = None
+    reason: str | None = None
+
+
+def is_verified_student(db: Session, user: User) -> bool:
+    return (
+        db.scalar(
             select(StudentAcademicProfile.id).where(
                 StudentAcademicProfile.user_id == user.id,
                 StudentAcademicProfile.verified_level_id.is_not(None),
             )
         )
-        if verified is None:
-            return False
+        is not None
+    )
 
-    if resource.access_policy == "public":
-        return True
 
-    package_contains_resource = exists().where(
-        PackageResource.package_id == Entitlement.package_id,
-        PackageResource.resource_id == resource.id,
-    )
-    package_contains_course = exists().where(
-        PackageCourse.package_id == Entitlement.package_id,
-        PackageCourse.course_id == resource.course_id,
-    )
-    subscription_entitlement = exists().where(
-        Entitlement.subscription_id == Subscription.id,
-        Entitlement.user_id == user.id,
-        Entitlement.status == "active",
-        Entitlement.expires_at > now,
-        Subscription.user_id == user.id,
-        Subscription.status == "active",
-        Subscription.is_active.is_(True),
-        Subscription.starts_at <= now,
-        Subscription.ends_at > now,
-        Payment.subscription_id == Subscription.id,
-        Payment.status == "succeeded",
-        Subscription.semester_id == resource.semester_id
-        if resource.semester_id is not None
-        else False,
-    )
-    entitlement = db.scalar(
-        select(Entitlement.id)
+def find_paid_entitlement(
+    db: Session,
+    user: User,
+    *,
+    resource_id: int | None,
+    course_id: int | None,
+    semester_id: int | None,
+) -> tuple[int, datetime | None] | None:
+    """Find an active, paid entitlement covering a resource or a course/semester.
+
+    Pass ``resource_id=None`` to check course-level access only (used by practice tests).
+    Returns ``(entitlement_id, expires_at)`` or None.
+    """
+    now = datetime.now(timezone.utc)
+
+    conditions = []
+    if resource_id is not None:
+        conditions.append(Entitlement.resource_id == resource_id)
+        conditions.append(
+            exists().where(
+                PackageResource.package_id == Entitlement.package_id,
+                PackageResource.resource_id == resource_id,
+            )
+        )
+    if course_id is not None:
+        conditions.append(Entitlement.course_id == course_id)
+        conditions.append(
+            exists().where(
+                PackageCourse.package_id == Entitlement.package_id,
+                PackageCourse.course_id == course_id,
+            )
+        )
+    if semester_id is not None:
+        conditions.append(
+            exists().where(
+                Entitlement.subscription_id == Subscription.id,
+                Entitlement.user_id == user.id,
+                Entitlement.status == "active",
+                Entitlement.expires_at > now,
+                Subscription.user_id == user.id,
+                Subscription.status == "active",
+                Subscription.is_active.is_(True),
+                Subscription.starts_at <= now,
+                Subscription.ends_at > now,
+                Payment.subscription_id == Subscription.id,
+                Payment.status == "succeeded",
+                Subscription.semester_id == semester_id,
+            )
+        )
+    if not conditions:
+        return None
+
+    row = db.execute(
+        select(Entitlement.id, Entitlement.expires_at)
         .join(Payment, Payment.id == Entitlement.payment_id)
         .where(
             Entitlement.user_id == user.id,
             Entitlement.status == "active",
             Payment.status == "succeeded",
             or_(Entitlement.expires_at.is_(None), Entitlement.expires_at > now),
-            or_(
-                Entitlement.resource_id == resource.id,
-                Entitlement.course_id == resource.course_id if resource.course_id is not None else False,
-                package_contains_resource,
-                package_contains_course if resource.course_id is not None else False,
-                subscription_entitlement,
-            ),
+            or_(*conditions),
         )
+        .order_by(Entitlement.expires_at.desc().nulls_first())
         .limit(1)
+    ).first()
+    if row is None:
+        return None
+    return row[0], row[1]
+
+
+def resource_access(db: Session, user: User, resource: Resource) -> AccessDecision:
+    """Decide whether a student may read this resource, and until when."""
+    if resource.requires_verification and not is_verified_student(db, user):
+        return AccessDecision(False, reason="verification_required")
+
+    if resource.access_policy == "public":
+        return AccessDecision(True, None)
+
+    found = find_paid_entitlement(
+        db,
+        user,
+        resource_id=resource.id,
+        course_id=resource.course_id,
+        semester_id=resource.semester_id,
     )
-    if entitlement is not None:
-        return True
-    return False
+    if found is None:
+        return AccessDecision(False, reason="subscription_required")
+    return AccessDecision(True, found[1])
+
+
+def can_download_resource(db: Session, user: User, resource: Resource) -> bool:
+    return resource_access(db, user, resource).allowed
 
 
 def resource_download_path(resource: Resource) -> Path:

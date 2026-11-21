@@ -90,3 +90,29 @@ export async function downloadResource(resourceId: string): Promise<void> {
   link.remove();
   URL.revokeObjectURL(objectUrl);
 }
+
+/** Fetch a binary response (e.g. a rendered page) with the signed-in student's token. */
+export async function apiBlob(path: string): Promise<Blob> {
+  const token = getAccessToken();
+  if (!token) throw new ApiError('Sign in to open this material.', 401);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
+  } catch {
+    throw new ApiError('Could not reach the Study Hub service.', 0);
+  }
+  if (!response.ok) {
+    let message = `The request failed (${response.status}).`;
+    try {
+      const payload = (await response.json()) as { detail?: unknown };
+      if (typeof payload.detail === 'string') message = payload.detail;
+    } catch {
+      // keep the default message
+    }
+    throw new ApiError(message, response.status);
+  }
+  return response.blob();
+}

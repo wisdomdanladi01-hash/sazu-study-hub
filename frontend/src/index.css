@@ -64,3 +64,11 @@
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 }
+
+
+/* The secure viewer must not print: pages are watermarked and licensed, not for hard copies. */
+@media print {
+  .secure-viewer {
+    display: none !important;
+  }
+}

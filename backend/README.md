@@ -37,7 +37,7 @@ alembic upgrade head
 
 Administrators can manage institutions, faculties, departments, programmes, courses, and course-offering verification through the authenticated `/api/v1/admin/academic` routes. `POST /api/v1/admin/academic/course-offerings/import` accepts UTF-8 CSV files up to 2 MB and 2,000 rows, validates all references, and rolls back the complete import if a row is invalid. Required CSV columns are `programme_code,course_code,course_title,level_code,academic_session,semester,credit_units`; optional columns are `department_code,curriculum_version,course_type,verification_status,source_note`. Imported rows default to `user_supplied`, and the default curriculum version is `Imported <academic_session>`.
 
-Assessment questions and practice-test APIs are not included. Do not publish invented questions; add these only after the project team supplies and approves the question bank and test rules.
+Practice tests are described under "Secure viewer, offline access and practice tests" below. No questions are seeded: administrators add only questions the project team has supplied and approved.
 
 ## Authentication and student verification
 
@@ -128,3 +128,38 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 Open the API docs at:
 - http://localhost:8000/docs
 - http://localhost:8000/redoc
+
+## Secure viewer, offline access and practice tests
+
+### Reading without downloading
+
+Students read materials in an in-app viewer. The original file is never sent to them: the server renders each page as a JPEG, stamps it with the student's name and account ID, and serves it with `Cache-Control: no-store`. PDFs and images (JPEG/PNG/WebP) and plain text are viewable. Word, PowerPoint and Excel files cannot be shown in the browser, so upload those as PDF.
+
+- `GET /api/v1/resources/{id}/viewer` returns the page list, expiry, and offline permission. Access uses the same rules as downloads (verification, subscription or entitlement).
+- `GET /api/v1/resources/{id}/viewer/pages/{n}` returns one watermarked page.
+- `GET /resources/{id}/download` and `/files/{file_id}/download` are admin-only unless `STUDENT_DOWNLOADS_ENABLED=true`. `/preview/file` follows the same rule, so it cannot be used to bypass the viewer. Resources marked `public` with no verification requirement are still freely streamable by design.
+
+Rendering uses `pypdfium2` and `pillow` (`pip install -r requirements.txt`).
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `STUDENT_DOWNLOADS_ENABLED` | `false` | Allow students to download originals |
+| `OFFLINE_ENABLED` | `true` | Allow saving pages for offline reading |
+| `OFFLINE_MAX_DAYS` | `7` | Longest an offline copy stays valid (never beyond the subscription end) |
+| `VIEWER_MAX_PAGES` | `500` | Page cap per material |
+| `VIEWER_PAGE_SCALE` | `1.6` | Render sharpness; higher is clearer and slower |
+
+Offline copies are encrypted in the browser, tied to the account, expire automatically, and are removed on sign-out. This is client-side enforcement: it deters casual copying and sharing but cannot stop screenshots. The per-page watermark exists so leaks can be traced.
+
+### Practice tests
+
+Administrators build a question bank (one question at a time or by CSV) and then configure tests that draw from selected materials, topics and a course.
+
+- Student: `GET /assessments`, `POST /assessments/{id}/attempts`, `GET /assessments/attempts/{id}`, `PUT /assessments/attempts/{id}/answers`, `POST /assessments/attempts/{id}/submit`, `GET /assessments/attempts/{id}/results`, `GET /assessments/attempts`.
+- Admin: `/admin/assessments/questions` (list, create, patch, delete = deactivate), `/admin/assessments/questions/import` (CSV, all-or-nothing), `/admin/assessments/configs` (list, create, patch, delete).
+
+Questions are frozen when a sitting starts and graded on the server; correct answers are never sent until the test is submitted (and not at all if the test hides answers). The server owns the clock, so refreshing or going offline does not reset it. Subscription-gated tests use the course/semester entitlement rules; a test with no semester set takes it from its source materials or the course offering.
+
+Apply the new migration with `alembic upgrade head` (`20261120_assessments`).
+
+Set `ACCESS_TOKEN_EXPIRE_MINUTES` to something longer than the default 20 (for example `720`), otherwise students are signed out mid-test.

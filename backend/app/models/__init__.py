@@ -14,6 +14,12 @@ from app.models.academic import (
     Semester,
     StudentAcademicProfile,
 )
+from app.models.assessment import (
+    AssessmentAttempt,
+    AssessmentConfig,
+    AssessmentConfigResource,
+    AssessmentQuestion,
+)
 from app.models.audit import AuditEvent
 from app.models.commerce import (
     AccessPackage,
@@ -61,4 +67,8 @@ __all__ = [
     "Payment",
     "Entitlement",
     "AuditEvent",
+    "AssessmentQuestion",
+    "AssessmentConfig",
+    "AssessmentConfigResource",
+    "AssessmentAttempt",
 ]

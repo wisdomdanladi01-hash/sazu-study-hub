@@ -1,0 +1,10 @@
+{
+  "name": "SAZU Study Hub",
+  "short_name": "SAZU Hub",
+  "description": "Past questions, handouts and practice tests for Sa'adu Zungur University students.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f7fa",
+  "theme_color": "#0e1f3d",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

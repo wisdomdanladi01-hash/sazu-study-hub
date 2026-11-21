@@ -103,7 +103,7 @@ export function PricingPage() {
           <div className="mt-5 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-teal-50 border border-teal-200 text-teal-900 text-xs sm:text-sm font-semibold">
             <GraduationCap className="h-4 w-4 text-teal-700" />
             <span>
-              Your Profile: {profile.academicProfile?.claimedLevel ?? 'Undergraduate'} •{' '}
+              Your Profile: {profile.academic?.level ?? 'Undergraduate'} •{' '}
               {profile.hasSubscription ? (
                 <span className="text-emerald-700 font-bold">Active Subscriber ✓</span>
               ) : (
@@ -246,7 +246,6 @@ export function PricingPage() {
                     <Button
                       size="lg"
                       fullWidth
-                      tone="primary"
                       onClick={() => void startCheckout(sessionPkg)}
                       loading={processingId === sessionPkg.id}
                       leftIcon={<CreditCard className="h-5 w-5" />}

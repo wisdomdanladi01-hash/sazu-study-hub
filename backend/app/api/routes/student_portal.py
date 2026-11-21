@@ -180,7 +180,12 @@ def _public_resource_data(db: Session, resource: Resource) -> dict[str, Any]:
         "is_restricted": resource.access_policy != "public",
         "preview_allowed": resource.access_policy == "public" or getattr(resource, "preview_policy", "none") in ("public_sample", "authenticated_only"),
         "preview_policy": getattr(resource, "preview_policy", "none"),
-        "preview_content": getattr(resource, "preview_content", None),
+        # Members-only excerpts must not appear in the anonymous catalogue.
+        "preview_content": (
+            getattr(resource, "preview_content", None)
+            if resource.access_policy == "public" or getattr(resource, "preview_policy", "none") == "public_sample"
+            else None
+        ),
         "requires_verification": resource.requires_verification,
         "is_available": True,
         "created_at": resource.created_at.isoformat(),

@@ -39,7 +39,7 @@ export function AdminVerificationsPage() {
     try {
       setLoading(true);
       setError(null);
-      const data = await adminService.listPendingVerifications();
+      const data = await adminService.listVerificationQueue();
       setSubmissions(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load verification submissions');
@@ -62,7 +62,7 @@ export function AdminVerificationsPage() {
 
     try {
       setLoadingDocs(true);
-      const docs = await adminService.listVerificationDocuments(submission.id);
+      const docs = await adminService.getSubmissionDocuments(submission.id);
       setDocuments(docs);
     } catch {
       setDecisionError('Failed to load supporting documents');
@@ -102,8 +102,8 @@ export function AdminVerificationsPage() {
       setDecisionError(null);
 
       await adminService.decideVerification(activeSubmission.id, {
-        decision: decisionType,
-        decision_reason: decisionReason.trim() || undefined,
+        decision: decisionType === 'approved' ? 'verified' : 'rejected',
+        reason: decisionReason.trim() || undefined,
         verified_level_id: verifiedLevelId === '' ? undefined : Number(verifiedLevelId),
         verified_session_id: verifiedSessionId === '' ? undefined : Number(verifiedSessionId),
       });

@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.routes.health import router as health_router
+from app.api.routes.assessments import admin_router as assessments_admin_router
+from app.api.routes.assessments import router as assessments_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.academic_admin import router as academic_admin_router
 from app.api.routes.payments import admin_router as payments_admin_router
@@ -45,11 +47,15 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
         headers["Access-Control-Allow-Credentials"] = "true"
     return JSONResponse(
         status_code=500,
-        content={
-            "detail": "An internal server error occurred.",
-            "error_type": type(exc).__name__,
-            "message": str(exc),
-        },
+        content=(
+            {
+                "detail": "An internal server error occurred.",
+                "error_type": type(exc).__name__,
+                "message": str(exc),
+            }
+            if settings.debug
+            else {"detail": "An internal server error occurred."}
+        ),
         headers=headers,
     )
 
@@ -65,6 +71,8 @@ app.include_router(resources_admin_router, prefix=settings.api_v1_str)
 app.include_router(payments_router, prefix=settings.api_v1_str)
 app.include_router(payments_admin_router, prefix=settings.api_v1_str)
 app.include_router(paystack_webhook_router, prefix=settings.api_v1_str)
+app.include_router(assessments_router, prefix=settings.api_v1_str)
+app.include_router(assessments_admin_router, prefix=settings.api_v1_str)
 
 
 @app.get("/")

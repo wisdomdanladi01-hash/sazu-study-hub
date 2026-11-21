@@ -1,647 +1,371 @@
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { assessmentService } from '@/services/assessments';
-import type { AssessmentResult } from '@/services/assessments';
-import type { PracticeAssessment } from '@/types';
-import { Card } from '@/components/ui/Card';
+import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Clock, Lock, Play, RotateCcw, XCircle } from 'lucide-react';
+import {
+  assessmentService,
+  lockMessage,
+  type Attempt,
+  type AttemptResult,
+  type PracticeConfig,
+} from '@/services/assessments';
+import { ApiError } from '@/services/api';
+import { useAuth } from '@/auth/AuthContext';
+import { Alert } from '@/components/ui/Alert';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Alert } from '@/components/ui/Alert';
-import {
-  ArrowLeft,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  AlertCircle,
-  Play,
-  RotateCcw,
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  HelpCircle,
-  FileCode,
-  GraduationCap,
-  Sparkles,
-  Info,
-} from 'lucide-react';
+import { Card } from '@/components/ui/Card';
+import { Dialog } from '@/components/ui/Dialog';
+
+const LETTERS = 'ABCDE';
+
+function formatClock(totalSeconds: number): string {
+  const safe = Math.max(0, totalSeconds);
+  const minutes = Math.floor(safe / 60);
+  const seconds = safe % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
 
 export function TestRunnerPage() {
-  const { id } = useParams();
+  const { id = '' } = useParams();
+  const configId = Number(id);
+  const { profile } = useAuth();
 
-  const [assessment, setAssessment] = useState<PracticeAssessment | null>(null);
+  const [config, setConfig] = useState<PracticeConfig | null>(null);
+  const [attempt, setAttempt] = useState<Attempt | null>(null);
+  const [result, setResult] = useState<AttemptResult | null>(null);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [index, setIndex] = useState(0);
+  const [secondsLeft, setSecondsLeft] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveWarning, setSaveWarning] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const submittingRef = useRef(false);
 
-  // Assessment Runner State
-  // 'idle' = instructions, 'active' = test in progress, 'finished' = submitted
-  const [testState, setTestState] = useState<'idle' | 'active' | 'finished'>('idle');
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [userAnswers, setUserAnswers] = useState<Record<string, 'A' | 'B' | 'C' | 'D'>>({});
-  const [timeRemaining, setTimeRemaining] = useState<number>(0);
-  const [result, setResult] = useState<AssessmentResult | null>(null);
-  const [showReview, setShowReview] = useState(false);
-  const [confirmSubmitModal, setConfirmSubmitModal] = useState(false);
-
-  const timerRef = useRef<number | null>(null);
-  const startTimeRef = useRef<number>(0);
-
-  // Load Assessment
+  // Load the test summary (lock state, attempts used) for the intro screen.
   useEffect(() => {
-    if (!id) return;
     let active = true;
     setLoading(true);
     assessmentService
-      .getAssessment(id)
-      .then((data) => {
+      .list()
+      .then((items) => {
         if (!active) return;
-        if (!data) setError('Assessment not found.');
-        else {
-          setAssessment(data);
-          setTimeRemaining(data.durationMinutes * 60);
-        }
+        const found = items.find((item) => item.id === configId) ?? null;
+        setConfig(found);
+        if (!found) setError('This practice test is not available.');
       })
-      .catch((err) => {
-        if (!active) return;
-        setError(err instanceof Error ? err.message : 'Failed to load assessment');
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
+      .catch((cause) => active && setError(cause instanceof Error ? cause.message : 'Unable to load this test.'))
+      .finally(() => active && setLoading(false));
     return () => {
       active = false;
-      if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [id]);
+  }, [configId, profile?.id]);
 
-  // Timer Effect
-  useEffect(() => {
-    if (testState === 'active') {
-      timerRef.current = window.setInterval(() => {
-        setTimeRemaining((prev) => {
-          if (prev <= 1) {
-            if (timerRef.current) clearInterval(timerRef.current);
-            handleAutoSubmit();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current);
+  const finish = useCallback(async (attemptId: number) => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setBusy(true);
+    try {
+      setResult(await assessmentService.submit(attemptId));
+      setConfirmOpen(false);
+    } catch (cause) {
+      submittingRef.current = false;
+      setError(cause instanceof Error ? cause.message : 'Unable to submit your test. Check your connection and try again.');
+    } finally {
+      setBusy(false);
     }
+  }, []);
 
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [testState]);
+  // Countdown. The server owns the deadline; this only displays it and auto-submits at zero.
+  useEffect(() => {
+    if (!attempt || result) return;
+    const timer = window.setInterval(() => {
+      setSecondsLeft((current) => {
+        if (current <= 1) {
+          window.clearInterval(timer);
+          void finish(attempt.id);
+          return 0;
+        }
+        return current - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [attempt, result, finish]);
 
-  const handleStartTest = () => {
-    if (!assessment) return;
-    setUserAnswers({});
-    setCurrentIndex(0);
-    setTimeRemaining(assessment.durationMinutes * 60);
-    startTimeRef.current = Date.now();
-    setTestState('active');
+  const begin = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const started = await assessmentService.start(configId);
+      setAttempt(started);
+      setAnswers(started.answers);
+      setSecondsLeft(started.seconds_remaining);
+      setIndex(0);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to start this test.');
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const handleSelectOption = (questionId: string, optionKey: 'A' | 'B' | 'C' | 'D') => {
-    setUserAnswers((prev) => ({
-      ...prev,
-      [questionId]: optionKey,
-    }));
+  const choose = async (questionId: number, key: string) => {
+    if (!attempt) return;
+    const previous = answers[String(questionId)];
+    const next = previous === key ? null : key; // tapping the chosen option clears it
+    setAnswers((current) => {
+      const copy = { ...current };
+      if (next === null) delete copy[String(questionId)];
+      else copy[String(questionId)] = next;
+      return copy;
+    });
+    try {
+      await assessmentService.saveAnswer(attempt.id, questionId, next);
+      setSaveWarning(null);
+    } catch (cause) {
+      const expired = cause instanceof ApiError && cause.status === 401;
+      setSaveWarning(
+        expired
+          ? 'Your session expired, so answers are not being saved. Sign in again in another tab, then keep going.'
+          : 'Could not save your last answer. Check your connection.',
+      );
+    }
   };
 
-  const handleAutoSubmit = () => {
-    submitAssessment();
-  };
+  if (loading) return <div className="container-page py-16 text-sm text-ink-600">Loading test…</div>;
 
-  const submitAssessment = () => {
-    if (!assessment) return;
-    if (timerRef.current) clearInterval(timerRef.current);
-
-    const elapsedSeconds = Math.max(
-      1,
-      Math.round((Date.now() - startTimeRef.current) / 1000),
-    );
-    const calculated = assessmentService.calculateResult(assessment, userAnswers, elapsedSeconds);
-    setResult(calculated);
-    setTestState('finished');
-    setConfirmSubmitModal(false);
-  };
-
-  const handlePromptSubmit = () => {
-    setConfirmSubmitModal(true);
-  };
-
-  const handleRestart = () => {
-    setTestState('idle');
-    setUserAnswers({});
-    setCurrentIndex(0);
-    setResult(null);
-    setShowReview(false);
-    if (assessment) setTimeRemaining(assessment.durationMinutes * 60);
-  };
-
-  if (loading) {
-    return <div className="container-page py-16 text-sm text-ink-600">Loading assessment details…</div>;
-  }
-
-  if (!assessment || error) {
+  // ------------------------------------------------------------- results
+  if (result) {
+    const answered = result.answered;
     return (
-      <div className="container-page py-16 max-w-xl">
-        <Alert tone="error" title="Assessment unavailable">
-          {error ?? 'This assessment could not be loaded.'}
-        </Alert>
-        <div className="mt-4">
-          <Link to="/practice">
-            <Button variant="outline" leftIcon={<ArrowLeft className="h-4 w-4" />}>
-              Back to practice tests
-            </Button>
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const unansweredCount =
-    assessment.questions.length - Object.keys(userAnswers).length;
-
-  // 1. INSTRUCTION SCREEN (IDLE)
-  if (testState === 'idle') {
-    return (
-      <div className="container-page py-8 sm:py-12 max-w-3xl space-y-6">
-        <nav className="flex items-center gap-1.5 text-sm text-ink-500" aria-label="Breadcrumb">
-          <Link to="/practice" className="hover:text-teal-700 inline-flex items-center gap-1">
-            <ArrowLeft className="h-3.5 w-3.5" /> Practice tests
-          </Link>
-          <span>/</span>
-          <span className="text-ink-700 truncate">{assessment.courseCode}</span>
-        </nav>
-
-        <Card className="p-6 sm:p-8 space-y-6">
-          <div>
-            <div className="flex flex-wrap items-center gap-2 mb-3">
-              <Badge tone="teal">{assessment.courseCode}</Badge>
-              <Badge tone="neutral">Level {assessment.level}</Badge>
-              <Badge tone="neutral">{assessment.semester}</Badge>
-              <Badge tone="neutral">{assessment.difficulty}</Badge>
-            </div>
-            <h1 className="font-display text-2xl sm:text-3xl font-bold text-ink-950">
-              {assessment.title}
-            </h1>
-            <p className="mt-1.5 text-sm font-medium text-ink-600">
-              Course: {assessment.courseTitle}
-            </p>
-            <p className="mt-4 text-sm text-ink-700 leading-relaxed">
-              {assessment.description}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 p-4 bg-ink-50 rounded-xl border border-ink-100 text-xs sm:text-sm">
-            <div>
-              <span className="text-ink-500 block text-xs">Total Questions</span>
-              <span className="font-bold text-ink-950 text-base">{assessment.questions.length} Questions</span>
-            </div>
-            <div>
-              <span className="text-ink-500 block text-xs">Time Limit</span>
-              <span className="font-bold text-ink-950 text-base">{assessment.durationMinutes} Minutes</span>
-            </div>
-            <div className="col-span-2 sm:col-span-1">
-              <span className="text-ink-500 block text-xs">Test Format</span>
-              <span className="font-bold text-ink-950 text-base">Multiple Choice (MCQ)</span>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <h3 className="font-display font-bold text-ink-900 text-sm uppercase tracking-wider">
-              Test Instructions & Rules
-            </h3>
-            <ul className="space-y-2 text-xs sm:text-sm text-ink-600 list-disc list-inside leading-relaxed">
-              <li>Each question has exactly one correct answer.</li>
-              <li>You can freely skip back and forth between questions using the question navigator.</li>
-              <li>The test will automatically submit if the timer reaches 00:00.</li>
-              <li>Immediate scoring and step-by-step pedagogical explanations are provided after submission.</li>
-              <li>
-                <strong>Academic Notice:</strong> This is an interactive demonstration assessment for personal study, not an official SAZU semester examination.
-              </li>
-            </ul>
-          </div>
-
-          <div className="pt-4 border-t border-ink-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <Link to="/practice" className="w-full sm:w-auto">
-              <Button variant="outline" fullWidth className="sm:w-auto">
-                Cancel
-              </Button>
+      <div className="container-page py-8 max-w-3xl space-y-6">
+        <Card className="p-6 sm:p-8 text-center">
+          <Badge tone={result.passed ? 'teal' : 'neutral'}>{result.passed ? 'Passed' : 'Below pass mark'}</Badge>
+          <h1 className="mt-3 font-display text-4xl font-bold text-ink-950">{result.score_percent}%</h1>
+          <p className="mt-1 text-sm text-ink-600">
+            {result.correct_count} of {result.total_questions} correct · {answered} answered · {result.grade}
+          </p>
+          {result.status === 'expired' && (
+            <p className="mt-2 text-xs text-amber-700">Time ran out, so your saved answers were marked.</p>
+          )}
+          <div className="mt-6 flex flex-wrap justify-center gap-2">
+            <Link to="/practice">
+              <Button variant="outline" leftIcon={<ArrowLeft className="h-4 w-4" />}>All tests</Button>
             </Link>
             <Button
-              size="lg"
-              fullWidth
-              className="sm:w-auto font-bold px-8"
-              onClick={handleStartTest}
-              rightIcon={<Play className="h-4 w-4 fill-current" />}
+              leftIcon={<RotateCcw className="h-4 w-4" />}
+              onClick={() => {
+                setResult(null);
+                setAttempt(null);
+                submittingRef.current = false;
+                void assessmentService.list().then((items) => setConfig(items.find((item) => item.id === configId) ?? config));
+              }}
             >
-              Begin Assessment
+              Try again
             </Button>
           </div>
         </Card>
-      </div>
-    );
-  }
 
-  // 2. ACTIVE TEST RUNNER
-  if (testState === 'active') {
-    const currentQ = assessment.questions[currentIndex];
-    const isUrgent = timeRemaining < 120; // less than 2 minutes
-
-    return (
-      <div className="container-page py-6 sm:py-8 max-w-4xl space-y-6">
-        {/* Runner Header Bar */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-ink-100 shadow-xs flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="text-xs text-ink-500 flex items-center gap-2">
-              <span className="font-bold text-teal-700">{assessment.courseCode}</span>
-              <span>•</span>
-              <span>Question {currentIndex + 1} of {assessment.questions.length}</span>
-            </div>
-            <h2 className="text-base font-bold text-ink-900 mt-0.5">{assessment.title}</h2>
-          </div>
-
-          <div className="flex items-center gap-4">
-            {/* Timer */}
-            <div
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-mono text-sm font-bold border transition ${
-                isUrgent
-                  ? 'bg-red-50 text-red-700 border-red-300 animate-pulse'
-                  : 'bg-ink-50 text-ink-800 border-ink-200'
-              }`}
-            >
-              <Clock className={`h-4 w-4 ${isUrgent ? 'text-red-600' : 'text-teal-600'}`} />
-              <span>{formatTime(timeRemaining)}</span>
-            </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handlePromptSubmit}
-              className="font-semibold text-teal-700 border-teal-300 hover:bg-teal-50"
-            >
-              Submit Test
-            </Button>
-          </div>
-        </div>
-
-        {/* Question Navigator Grid */}
-        <div className="bg-white p-4 rounded-xl border border-ink-100 shadow-xs">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-ink-500">
-              Question Navigator
-            </span>
-            <span className="text-xs text-ink-600">
-              {Object.keys(userAnswers).length} of {assessment.questions.length} Answered
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {assessment.questions.map((q, idx) => {
-              const isCurrent = idx === currentIndex;
-              const isAnswered = userAnswers[q.id] !== undefined;
-
-              return (
-                <button
-                  key={q.id}
-                  type="button"
-                  onClick={() => setCurrentIndex(idx)}
-                  className={`h-9 w-9 rounded-lg text-xs font-bold flex items-center justify-center transition ${
-                    isCurrent
-                      ? 'bg-teal-600 text-white ring-2 ring-teal-500 ring-offset-2'
-                      : isAnswered
-                      ? 'bg-teal-100 text-teal-900 border border-teal-300 hover:bg-teal-200'
-                      : 'bg-ink-50 text-ink-700 border border-ink-200 hover:bg-ink-100'
-                  }`}
-                >
-                  {idx + 1}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Question Display Card */}
-        <Card className="p-6 sm:p-8 space-y-6">
-          <div className="flex items-start justify-between gap-4">
-            <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-teal-50 text-teal-800 text-xs font-bold border border-teal-200">
-              Question {currentIndex + 1}
-            </span>
-            {userAnswers[currentQ.id] ? (
-              <span className="inline-flex items-center gap-1 text-xs text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                <Check className="h-3 w-3" /> Answer selected ({userAnswers[currentQ.id]})
-              </span>
-            ) : (
-              <span className="text-xs text-ink-400 italic">Not answered yet</span>
-            )}
-          </div>
-
-          {/* Question Text */}
-          <div className="text-base sm:text-lg font-semibold text-ink-950 leading-relaxed">
-            {currentQ.text}
-          </div>
-
-          {/* Code Snippet if applicable */}
-          {currentQ.codeSnippet && (
-            <div className="rounded-xl overflow-hidden border border-ink-800 bg-ink-950 text-ink-100 font-mono text-xs sm:text-sm p-4">
-              <div className="flex items-center justify-between pb-2 mb-2 border-b border-ink-800 text-[11px] text-ink-400">
-                <span className="flex items-center gap-1.5">
-                  <FileCode className="h-3.5 w-3.5 text-teal-400" /> Code Reference
-                </span>
-              </div>
-              <pre className="overflow-x-auto whitespace-pre leading-relaxed select-text">
-                {currentQ.codeSnippet}
-              </pre>
-            </div>
-          )}
-
-          {/* Options List */}
-          <div className="space-y-3 pt-2">
-            {currentQ.options.map((opt) => {
-              const isSelected = userAnswers[currentQ.id] === opt.key;
-
-              return (
-                <div
-                  key={opt.key}
-                  onClick={() => handleSelectOption(currentQ.id, opt.key)}
-                  className={`p-4 rounded-xl border flex items-start gap-3.5 cursor-pointer transition select-none ${
-                    isSelected
-                      ? 'border-teal-600 bg-teal-50/70 shadow-xs'
-                      : 'border-ink-200 hover:border-ink-300 hover:bg-ink-50/50 bg-white'
-                  }`}
-                >
-                  <div
-                    className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition ${
-                      isSelected
-                        ? 'bg-teal-600 text-white'
-                        : 'border border-ink-300 bg-white text-ink-700'
-                    }`}
-                  >
-                    {opt.key}
-                  </div>
-                  <div className={`text-sm leading-relaxed ${isSelected ? 'font-semibold text-teal-950' : 'text-ink-800'}`}>
-                    {opt.text}
-                  </div>
+        {!result.answers_revealed ? (
+          <Alert tone="info">Correct answers are not shown for this test.</Alert>
+        ) : (
+          result.review.map((item) => (
+            <Card key={item.question_id} className="p-5">
+              <div className="flex items-start gap-3">
+                {item.is_correct ? (
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                ) : (
+                  <XCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                )}
+                <div className="min-w-0">
+                  <p className="font-semibold text-ink-900 whitespace-pre-wrap">
+                    {item.number}. {item.text}
+                  </p>
+                  <ul className="mt-3 space-y-1.5">
+                    {item.options.map((option, position) => {
+                      const isCorrect = option.key === item.correct_key;
+                      const isChosen = option.key === item.chosen_key;
+                      return (
+                        <li
+                          key={option.key}
+                          className={`rounded-lg border px-3 py-2 text-sm ${
+                            isCorrect
+                              ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
+                              : isChosen
+                                ? 'border-red-300 bg-red-50 text-red-900'
+                                : 'border-ink-100 text-ink-700'
+                          }`}
+                        >
+                          <span className="font-semibold mr-2">{LETTERS[position]}.</span>
+                          {option.text}
+                          {isCorrect && <span className="ml-2 text-xs font-semibold">Correct answer</span>}
+                          {isChosen && !isCorrect && <span className="ml-2 text-xs font-semibold">Your answer</span>}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {item.chosen_key === null && <p className="mt-2 text-xs text-ink-500">You did not answer this question.</p>}
+                  {item.explanation && (
+                    <p className="mt-3 text-sm text-ink-700 bg-ink-50 rounded-lg p-3 whitespace-pre-wrap">{item.explanation}</p>
+                  )}
                 </div>
-              );
-            })}
-          </div>
-
-          {/* Bottom Step Controls */}
-          <div className="pt-6 border-t border-ink-100 flex items-center justify-between gap-3">
-            <Button
-              variant="outline"
-              disabled={currentIndex === 0}
-              onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
-              leftIcon={<ChevronLeft className="h-4 w-4" />}
-            >
-              Previous
-            </Button>
-
-            <div className="flex items-center gap-2">
-              {currentIndex < assessment.questions.length - 1 ? (
-                <Button
-                  onClick={() => setCurrentIndex((prev) => Math.min(assessment.questions.length - 1, prev + 1))}
-                  rightIcon={<ChevronRight className="h-4 w-4" />}
-                >
-                  Next
-                </Button>
-              ) : (
-                <Button
-                  className="font-bold bg-teal-700 hover:bg-teal-800"
-                  onClick={handlePromptSubmit}
-                >
-                  Review & Submit
-                </Button>
-              )}
-            </div>
-          </div>
-        </Card>
-
-        {/* Early Submit Confirmation Modal */}
-        {confirmSubmitModal && (
-          <div className="fixed inset-0 z-50 bg-ink-950/50 backdrop-blur-xs flex items-center justify-center p-4">
-            <Card className="max-w-md w-full p-6 space-y-4">
-              <div className="flex items-center gap-3 text-amber-600">
-                <AlertCircle className="h-6 w-6" />
-                <h3 className="font-display font-bold text-lg text-ink-950">Confirm Test Submission</h3>
-              </div>
-
-              {unansweredCount > 0 ? (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs sm:text-sm text-amber-900 leading-relaxed">
-                  You still have <strong>{unansweredCount} unanswered question{unansweredCount > 1 ? 's' : ''}</strong> out of {assessment.questions.length}. Any unanswered questions will be marked incorrect.
-                </div>
-              ) : (
-                <p className="text-sm text-ink-600">
-                  You have answered all {assessment.questions.length} questions. Are you ready to submit and calculate your score?
-                </p>
-              )}
-
-              <div className="flex items-center justify-end gap-3 pt-3">
-                <Button variant="outline" onClick={() => setConfirmSubmitModal(false)}>
-                  Continue Answering
-                </Button>
-                <Button
-                  className="font-bold bg-teal-600 hover:bg-teal-700"
-                  onClick={submitAssessment}
-                >
-                  Submit Assessment
-                </Button>
               </div>
             </Card>
-          </div>
+          ))
         )}
       </div>
     );
   }
 
-  // 3. RESULTS & REVIEW SCREEN (FINISHED)
+  // ------------------------------------------------------------- in progress
+  if (attempt) {
+    const question = attempt.questions[index];
+    const answeredCount = Object.keys(answers).length;
+    const low = secondsLeft <= 60;
+    return (
+      <div className="container-page py-6 max-w-3xl space-y-5">
+        <div className="flex items-center justify-between gap-3 sticky top-[var(--header-h)] z-10 bg-ink-50/95 backdrop-blur py-2">
+          <div className="min-w-0">
+            <p className="text-xs text-ink-500 truncate">{attempt.title}</p>
+            <p className="text-sm font-semibold text-ink-900">
+              Question {index + 1} of {attempt.questions.length} · {answeredCount} answered
+            </p>
+          </div>
+          <div className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-bold ${low ? 'bg-red-100 text-red-700' : 'bg-white text-ink-900 border border-ink-200'}`}>
+            <Clock className="h-4 w-4" />
+            {formatClock(secondsLeft)}
+          </div>
+        </div>
+
+        {error && <Alert tone="error">{error}</Alert>}
+        {saveWarning && <Alert tone="warning">{saveWarning}</Alert>}
+
+        {question && (
+          <Card className="p-5 sm:p-6">
+            <p className="text-base sm:text-lg font-semibold text-ink-950 whitespace-pre-wrap">{question.text}</p>
+            <div className="mt-5 space-y-2.5">
+              {question.options.map((option, position) => {
+                const selected = answers[String(question.id)] === option.key;
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => void choose(question.id, option.key)}
+                    className={`w-full text-left rounded-xl border px-4 py-3 text-sm transition ${
+                      selected ? 'border-teal-500 bg-teal-50 text-teal-950' : 'border-ink-200 bg-white hover:border-ink-300 text-ink-800'
+                    }`}
+                  >
+                    <span className="font-bold mr-2">{LETTERS[position]}.</span>
+                    {option.text}
+                  </button>
+                );
+              })}
+            </div>
+          </Card>
+        )}
+
+        <div className="flex items-center justify-between gap-2">
+          <Button variant="outline" disabled={index === 0} onClick={() => setIndex((i) => i - 1)} leftIcon={<ChevronLeft className="h-4 w-4" />}>
+            Previous
+          </Button>
+          {index < attempt.questions.length - 1 ? (
+            <Button onClick={() => setIndex((i) => i + 1)} rightIcon={<ChevronRight className="h-4 w-4" />}>
+              Next
+            </Button>
+          ) : (
+            <Button onClick={() => setConfirmOpen(true)}>Finish test</Button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-1.5">
+          {attempt.questions.map((item, position) => (
+            <button
+              key={item.id}
+              type="button"
+              aria-label={`Go to question ${position + 1}`}
+              onClick={() => setIndex(position)}
+              className={`h-8 w-8 rounded-md text-xs font-semibold border ${
+                position === index
+                  ? 'bg-ink-900 text-white border-ink-900'
+                  : answers[String(item.id)]
+                    ? 'bg-teal-50 border-teal-300 text-teal-900'
+                    : 'bg-white border-ink-200 text-ink-600'
+              }`}
+            >
+              {position + 1}
+            </button>
+          ))}
+        </div>
+        <div className="text-center">
+          <Button variant="ghost" size="sm" onClick={() => setConfirmOpen(true)}>
+            Submit now
+          </Button>
+        </div>
+
+        <Dialog
+          open={confirmOpen}
+          onClose={() => setConfirmOpen(false)}
+          title="Submit your test?"
+          description={
+            answeredCount < attempt.questions.length
+              ? `You have answered ${answeredCount} of ${attempt.questions.length} questions. Unanswered questions score zero.`
+              : 'You have answered every question.'
+          }
+          footer={
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setConfirmOpen(false)}>Keep working</Button>
+              <Button loading={busy} onClick={() => void finish(attempt.id)}>Submit</Button>
+            </div>
+          }
+        >
+          <p className="text-sm text-ink-600">You cannot change your answers after submitting.</p>
+        </Dialog>
+      </div>
+    );
+  }
+
+  // ------------------------------------------------------------- intro
   return (
-    <div className="container-page py-8 sm:py-12 max-w-3xl space-y-8">
-      {/* Result Overview Card */}
-      <Card className="p-6 sm:p-8 text-center space-y-6">
-        <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-teal-50 text-teal-600 border border-teal-200 mx-auto">
-          <GraduationCap className="h-8 w-8" />
-        </div>
-
-        <div>
-          <div className="flex items-center justify-center gap-2 mb-1 text-xs text-ink-500 font-medium">
-            <span>{assessment.courseCode}</span>
-            <span>•</span>
-            <span>{assessment.title}</span>
-          </div>
-          <h1 className="font-display text-2xl sm:text-3xl font-black text-ink-950">
-            Assessment Complete
-          </h1>
-          <p className="text-xs text-ink-500 mt-1">
-            Completed on {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}
-          </p>
-        </div>
-
-        {/* Score Typography */}
-        <div className="p-6 bg-ink-50 rounded-2xl border border-ink-100 max-w-sm mx-auto">
-          <div className="text-xs font-bold uppercase tracking-wider text-ink-500 mb-1">
-            Your Score
-          </div>
-          <div className="text-4xl sm:text-5xl font-black text-teal-700 tracking-tight">
-            {result?.scorePercentage}%
-          </div>
-          <div className="mt-2 text-xs font-semibold text-ink-700">
-            {result?.correctCount} out of {result?.totalQuestions} correct
-          </div>
-          <div className="mt-2 inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-white border border-ink-200 text-ink-800">
-            Grade: {result?.grade}
-          </div>
-        </div>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 gap-4 text-xs text-ink-700 max-w-md mx-auto">
-          <div className="p-3 bg-white border border-ink-100 rounded-xl">
-            <span className="text-ink-400 block mb-0.5">Time Spent</span>
-            <span className="font-bold text-sm">{formatTime(result?.durationSeconds ?? 0)}</span>
-          </div>
-          <div className="p-3 bg-white border border-ink-100 rounded-xl">
-            <span className="text-ink-400 block mb-0.5">Answered Questions</span>
-            <span className="font-bold text-sm">
-              {result?.answeredCount} / {result?.totalQuestions}
-            </span>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="pt-4 border-t border-ink-100 flex flex-wrap items-center justify-center gap-3">
-          <Button
-            variant="outline"
-            onClick={handleRestart}
-            leftIcon={<RotateCcw className="h-4 w-4" />}
-          >
-            Retake Test
-          </Button>
-          <Button
-            onClick={() => setShowReview(!showReview)}
-            className="font-bold"
-            leftIcon={<HelpCircle className="h-4 w-4" />}
-          >
-            {showReview ? 'Hide Explanations' : 'Review Questions & Explanations'}
-          </Button>
-          <Link to="/practice">
-            <Button variant="ghost">All Practice Tests</Button>
-          </Link>
-        </div>
-      </Card>
-
-      {/* 4. DETAILED ANSWER REVIEW SECTION */}
-      {showReview && (
-        <div className="space-y-6 pt-4 animate-fade-in">
-          <div className="flex items-center justify-between">
-            <h2 className="font-display text-xl font-bold text-ink-950 flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-teal-600" /> Question-by-Question Review
-            </h2>
-            <span className="text-xs text-ink-500">
-              Green = Correct answer • Red = Incorrect choice
-            </span>
-          </div>
-
-          {assessment.questions.map((q, idx) => {
-            const userChoice = userAnswers[q.id];
-            const isCorrect = userChoice === q.correctAnswer;
-
-            return (
-              <Card key={q.id} className="p-6 space-y-4 border border-ink-200">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-bold text-ink-700 bg-ink-100 px-2.5 py-1 rounded">
-                    Question {idx + 1}
-                  </span>
-                  {userChoice ? (
-                    isCorrect ? (
-                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200">
-                        <CheckCircle2 className="h-4 w-4" /> Correct (+1)
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-red-700 bg-red-50 px-2.5 py-1 rounded border border-red-200">
-                        <XCircle className="h-4 w-4" /> Incorrect (0)
-                      </span>
-                    )
-                  ) : (
-                    <span className="text-xs font-medium text-amber-700 bg-amber-50 px-2.5 py-1 rounded border border-amber-200">
-                      Unanswered
-                    </span>
-                  )}
-                </div>
-
-                <div className="text-sm font-semibold text-ink-950 leading-relaxed">
-                  {q.text}
-                </div>
-
-                {q.codeSnippet && (
-                  <div className="rounded-xl overflow-hidden border border-ink-800 bg-ink-950 text-ink-100 font-mono text-xs p-3.5">
-                    <pre className="overflow-x-auto whitespace-pre leading-relaxed select-text">
-                      {q.codeSnippet}
-                    </pre>
-                  </div>
+    <div className="container-page py-10 max-w-xl">
+      <Link to="/practice" className="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-teal-700">
+        <ArrowLeft className="h-3.5 w-3.5" /> All practice tests
+      </Link>
+      {error && !config ? (
+        <Alert tone="error" className="mt-4">{error}</Alert>
+      ) : config ? (
+        <Card className="mt-4 p-6 sm:p-8">
+          <Badge tone="teal">{config.course.code}</Badge>
+          <h1 className="mt-3 font-display text-2xl font-bold text-ink-950">{config.title}</h1>
+          <p className="text-sm text-ink-500">{config.course.title}</p>
+          {config.description && <p className="mt-3 text-sm text-ink-700">{config.description}</p>}
+          <ul className="mt-5 text-sm text-ink-700 space-y-1.5 list-disc pl-5">
+            <li>{config.question_count} multiple-choice questions</li>
+            <li>{config.duration_minutes} minutes. The timer keeps running if you leave, and your answers are saved as you go.</li>
+            <li>Pass mark {config.pass_mark_percent}%{config.max_attempts ? ` · ${config.max_attempts} attempt(s) allowed` : ''}</li>
+          </ul>
+          {error && <Alert tone="error" className="mt-4">{error}</Alert>}
+          <div className="mt-6">
+            {config.locked ? (
+              <div className="space-y-3">
+                <Alert tone="warning">
+                  <span className="inline-flex items-center gap-1.5"><Lock className="h-4 w-4" />{lockMessage(config.lock_reason)}</span>
+                </Alert>
+                {config.lock_reason === 'sign_in_required' ? (
+                  <Link to={`/login?redirect=${encodeURIComponent(`/practice/${config.id}`)}`}><Button>Sign in</Button></Link>
+                ) : config.lock_reason === 'verification_required' ? (
+                  <Link to="/onboarding"><Button>Complete verification</Button></Link>
+                ) : (
+                  <Link to="/pricing"><Button>View subscription options</Button></Link>
                 )}
-
-                {/* Option Breakdown */}
-                <div className="space-y-2">
-                  {q.options.map((opt) => {
-                    const isTheCorrectOne = opt.key === q.correctAnswer;
-                    const isUserChoice = userChoice === opt.key;
-
-                    let rowStyle = 'border-ink-100 bg-white text-ink-700';
-                    if (isTheCorrectOne) {
-                      rowStyle = 'border-emerald-500 bg-emerald-50/70 text-emerald-950 font-semibold ring-1 ring-emerald-500';
-                    } else if (isUserChoice && !isCorrect) {
-                      rowStyle = 'border-red-400 bg-red-50/60 text-red-950 ring-1 ring-red-400';
-                    }
-
-                    return (
-                      <div
-                        key={opt.key}
-                        className={`p-3 rounded-xl border text-xs sm:text-sm flex items-start justify-between gap-3 ${rowStyle}`}
-                      >
-                        <div className="flex items-start gap-2.5">
-                          <span className="font-bold">{opt.key}.</span>
-                          <span>{opt.text}</span>
-                        </div>
-                        {isTheCorrectOne && (
-                          <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 shrink-0">
-                            <Check className="h-3.5 w-3.5" /> Correct Answer
-                          </span>
-                        )}
-                        {isUserChoice && !isTheCorrectOne && (
-                          <span className="text-xs font-bold text-red-700 shrink-0">
-                            Your Choice
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Explanation Box */}
-                <div className="p-3.5 bg-ink-50 rounded-xl border border-ink-100 text-xs text-ink-700 space-y-1">
-                  <div className="font-bold text-ink-900 flex items-center gap-1.5">
-                    <Info className="h-3.5 w-3.5 text-teal-600" /> Explanation
-                  </div>
-                  <p className="leading-relaxed">{q.explanation}</p>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+              </div>
+            ) : (
+              <Button loading={busy} onClick={() => void begin()} leftIcon={<Play className="h-4 w-4" />}>
+                {config.in_progress_attempt_id ? 'Resume test' : 'Start test'}
+              </Button>
+            )}
+          </div>
+        </Card>
+      ) : null}
     </div>
   );
 }

@@ -134,7 +134,7 @@ export const adminService = {
   async listDepartments(): Promise<AdminDepartment[]> {
     return apiRequest<AdminDepartment[]>('/admin/academic/departments');
   },
-  async createDepartment(data: { code: string; name: string; faculty_id?: number | null; programme_id?: number | null; source_note?: string | null }): Promise<AdminDepartment> {
+  async createDepartment(data: { code: string; name: string; faculty_id?: number | null; programme_id?: number | null; status?: string; source_note?: string | null }): Promise<AdminDepartment> {
     return apiRequest<AdminDepartment>('/admin/academic/departments', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -151,7 +151,7 @@ export const adminService = {
   async listProgrammes(): Promise<AdminProgramme[]> {
     return apiRequest<AdminProgramme[]>('/admin/academic/programmes');
   },
-  async createProgramme(data: { code: string; name: string; faculty_id?: number | null; award?: string | null; study_level?: string; source_note?: string | null }): Promise<AdminProgramme> {
+  async createProgramme(data: { code: string; name: string; faculty_id?: number | null; award?: string | null; study_level?: string; status?: string; source_note?: string | null }): Promise<AdminProgramme> {
     return apiRequest<AdminProgramme>('/admin/academic/programmes', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -245,7 +245,7 @@ export const adminService = {
     return apiRequest<VerificationDocument[]>(`/admin/verification/submissions/${submissionId}/documents`);
   },
   async decideVerification(submissionId: number, data: {
-    decision: 'verify' | 'reject' | 'request_resubmission';
+    decision: 'verified' | 'rejected' | 'needs_review';
     reason?: string;
     verified_level_id?: number | null;
     verified_session_id?: number | null;

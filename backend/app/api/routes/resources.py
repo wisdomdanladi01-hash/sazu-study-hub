@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, Literal
 
 from fastapi import (
@@ -7,7 +7,9 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Path,
     Query,
+    Response,
     UploadFile,
     status,
 )
@@ -30,9 +32,13 @@ from app.schemas.resource import (
     ResourcePreviewResponse,
     ResourceResponse,
     ResourceUpdate,
+    ViewerManifest,
+    ViewerPage,
 )
+from app.models.audit import AuditEvent
 from app.services.errors import ConflictError, NotFoundError, PolicyError
 from app.services.resources import (
+    AccessDecision,
     can_download_resource,
     create_resource,
     create_resource_category,
@@ -45,8 +51,16 @@ from app.services.resources import (
     replace_resource_file,
     resource_download_path,
     resource_file_download_path,
+    resource_access,
     resource_is_available,
     update_resource,
+)
+from app.services.viewer import (
+    build_page_index,
+    content_version,
+    render_page,
+    resource_sources,
+    watermark_text,
 )
 
 router = APIRouter(prefix="/resources", tags=["resources"])
@@ -91,6 +105,49 @@ def _get_optional_user(
         return user if user and user.is_active else None
     except Exception:
         return None
+
+
+_NO_STORE_HEADERS = {
+    "Cache-Control": "private, no-store, max-age=0",
+    "Pragma": "no-cache",
+    "X-Content-Type-Options": "nosniff",
+    "Content-Disposition": "inline",
+    "Referrer-Policy": "no-referrer",
+}
+
+_DENIED_MESSAGES = {
+    "verification_required": "Your student verification must be approved before you can open this material.",
+    "subscription_required": "An active subscription is required to open this material.",
+}
+
+
+def _aware(value: datetime) -> datetime:
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
+
+def _require_download_permission(db: Session, user: User) -> None:
+    """Students read in the secure viewer; raw downloads are admin-only unless enabled in settings."""
+    if settings.student_downloads_enabled or _is_admin(db, user):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Downloads are disabled. Open this material in the secure viewer instead.",
+    )
+
+
+def _viewer_access(db: Session, user: User, resource_id: int) -> tuple[Resource, AccessDecision]:
+    resource = _get_resource_or_404(db, resource_id)
+    if _is_admin(db, user):
+        return resource, AccessDecision(True, None)
+    if not resource_is_available(resource):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found.")
+    decision = resource_access(db, user, resource)
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_DENIED_MESSAGES.get(decision.reason or "", "You do not have access to this resource."),
+        )
+    return resource, decision
 
 
 @router.get("/categories", response_model=list[ResourceCategoryResponse])
@@ -189,7 +246,7 @@ def get_resource_preview(
             message="Approved preview sample.",
         )
 
-    if mime.startswith("image/"):
+    if mime.startswith("image/") and resource.access_policy == "public" and not resource.requires_verification:
         return ResourcePreviewResponse(
             id=resource.id,
             title=resource.title,
@@ -203,7 +260,7 @@ def get_resource_preview(
         )
 
     if mime == "application/pdf":
-        is_public_doc = resource.access_policy == "public"
+        is_public_doc = resource.access_policy == "public" and not resource.requires_verification
         return ResourcePreviewResponse(
             id=resource.id,
             title=resource.title,
@@ -214,7 +271,7 @@ def get_resource_preview(
             preview_type="pdf" if is_public_doc else "none",
             preview_url=f"/api/v1/resources/{resource.id}/preview/file" if is_public_doc else None,
             preview_content=preview_content,
-            message="PDF preview available." if is_public_doc else "Preview excerpt not yet published for this PDF.",
+            message="PDF preview available." if is_public_doc else "Open this material in the secure viewer with an active subscription.",
         )
 
     if mime in ("text/plain", "text/markdown"):
@@ -238,7 +295,7 @@ def get_resource_preview(
         preview_policy=policy,
         preview_available=False,
         preview_type="unsupported",
-        message=f"In-browser preview is unavailable for {resource.mime_type} files. Please download the document to view it.",
+        message="A sample preview is not available for this material. Open it in the secure viewer with an active subscription.",
     )
 
 
@@ -262,16 +319,24 @@ def stream_preview_file(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    mime = (resource.mime_type or "").lower()
-    is_image = mime.startswith("image/")
-    is_public = resource.access_policy == "public"
-
-    # Only images or public documents may stream full file content as preview
-    if not (is_image or is_public):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Full file access is restricted. Use the published sample preview or sign in with an active subscription.",
-        )
+    # The full original may only be streamed here if it is genuinely free (public, no
+    # verification needed). Everyone else must use the secure viewer, which watermarks
+    # pages and never exposes the source file.
+    public_open = resource.access_policy == "public" and not resource.requires_verification
+    if not public_open:
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Sign in to view this file.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        if not (_is_admin(db, user) or can_download_resource(db, user, resource)):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Full file access is restricted. Open the material in the secure viewer with an active subscription.",
+            )
+        # Entitled students still must not pull the raw original through this route.
+        _require_download_permission(db, user)
 
     try:
         path = resource_download_path(resource)
@@ -286,6 +351,83 @@ def stream_preview_file(
     )
 
 
+@router.get("/{resource_id}/viewer", response_model=ViewerManifest)
+def viewer_manifest(
+    resource_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ViewerManifest:
+    """Page list for the secure in-app viewer. The original file is never sent to students."""
+    resource, decision = _viewer_access(db, user, resource_id)
+    sources = resource_sources(resource)
+    try:
+        pages, skipped = build_page_index(sources)
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    message = None
+    if not pages:
+        message = (
+            "This file type cannot be opened in the browser viewer. "
+            "Ask the administrator to upload it as a PDF."
+        )
+    elif skipped:
+        message = f"Some attachments cannot be shown in the viewer: {', '.join(skipped)}."
+
+    now = datetime.now(timezone.utc)
+    offline_cap = now + timedelta(days=settings.offline_max_days)
+    expires = _aware(decision.expires_at) if decision.expires_at is not None else None
+    offline_expires = min(offline_cap, expires) if expires is not None else offline_cap
+
+    db.add(
+        AuditEvent(
+            actor_user_id=user.id,
+            action="student.resource_viewed",
+            target_type="resource",
+            target_id=str(resource.id),
+        )
+    )
+    db.commit()
+
+    return ViewerManifest(
+        user_id=user.id,
+        resource_id=resource.id,
+        title=resource.title,
+        version=content_version(sources),
+        viewable=bool(pages),
+        message=message,
+        page_count=len(pages),
+        pages=[ViewerPage(number=page.number, kind=page.kind) for page in pages],
+        access_expires_at=expires,
+        offline_allowed=settings.offline_enabled and bool(pages),
+        offline_expires_at=offline_expires if settings.offline_enabled else None,
+        downloads_enabled=settings.student_downloads_enabled or _is_admin(db, user),
+        watermark=watermark_text(user.full_name, user.id),
+    )
+
+
+@router.get("/{resource_id}/viewer/pages/{page_number}")
+def viewer_page(
+    resource_id: int,
+    page_number: Annotated[int, Path(ge=1)],
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    """One watermarked page, rendered on the server and never cached by the browser HTTP cache."""
+    resource, _decision = _viewer_access(db, user, resource_id)
+    sources = resource_sources(resource)
+    try:
+        pages, _skipped = build_page_index(sources)
+        if page_number > len(pages):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Page not found.")
+        body, media_type = render_page(sources, pages[page_number - 1], watermark_text(user.full_name, user.id))
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValueError as exc:  # PageRenderError subclasses ValueError
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return Response(content=body, media_type=media_type, headers=_NO_STORE_HEADERS)
+
+
 @router.get("/{resource_id}/download", response_class=FileResponse)
 def download_resource(
     resource_id: int,
@@ -297,6 +439,7 @@ def download_resource(
     if not is_admin:
         if not resource_is_available(resource):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found.")
+        _require_download_permission(db, user)
         if not can_download_resource(db, user, resource):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -339,6 +482,7 @@ def download_resource_file_item(
     if not is_admin:
         if not resource_is_available(resource):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found.")
+        _require_download_permission(db, user)
         if not can_download_resource(db, user, resource):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

@@ -1,85 +1,103 @@
-import { DEMONSTRATION_ASSESSMENTS } from '@/data/demonstrationAssessments';
-import type { PracticeAssessment } from '@/types';
+import { apiRequest } from '@/services/api';
 
-export interface AssessmentResult {
-  assessmentId: string;
-  totalQuestions: number;
-  answeredCount: number;
-  correctCount: number;
-  scorePercentage: number;
-  grade: 'Distinction' | 'Credit' | 'Pass' | 'Fail';
-  completedAt: string;
-  durationSeconds: number;
-  answers: Record<string, 'A' | 'B' | 'C' | 'D'>;
+export interface CourseRef {
+  id: number;
+  code: string;
+  title: string;
+}
+
+export interface PracticeConfig {
+  id: number;
+  title: string;
+  description: string | null;
+  course: CourseRef;
+  question_count: number;
+  duration_minutes: number;
+  pass_mark_percent: number;
+  max_attempts: number | null;
+  requires_subscription: boolean;
+  locked: boolean;
+  lock_reason: 'sign_in_required' | 'verification_required' | 'subscription_required' | null;
+  attempts_used: number;
+  in_progress_attempt_id: number | null;
+  best_score_percent: number | null;
+}
+
+export interface OptionItem {
+  key: string;
+  text: string;
+}
+
+export interface AttemptQuestion {
+  id: number;
+  number: number;
+  text: string;
+  options: OptionItem[];
+}
+
+export interface Attempt {
+  id: number;
+  config_id: number;
+  title: string;
+  status: 'in_progress' | 'submitted' | 'expired';
+  started_at: string;
+  expires_at: string;
+  seconds_remaining: number;
+  total_questions: number;
+  answers: Record<string, string>;
+  questions: AttemptQuestion[];
+}
+
+export interface ReviewItem {
+  question_id: number;
+  number: number;
+  text: string;
+  options: OptionItem[];
+  chosen_key: string | null;
+  correct_key: string | null;
+  is_correct: boolean;
+  explanation: string | null;
+}
+
+export interface AttemptResult {
+  attempt_id: number;
+  config_id: number;
+  title: string;
+  status: string;
+  total_questions: number;
+  answered: number;
+  correct_count: number;
+  score_percent: number;
+  pass_mark_percent: number;
+  passed: boolean;
+  grade: string;
+  submitted_at: string | null;
+  answers_revealed: boolean;
+  review: ReviewItem[];
 }
 
 export const assessmentService = {
-  async listAssessments(params?: {
-    query?: string;
-    courseCode?: string;
-    difficulty?: string;
-  }): Promise<PracticeAssessment[]> {
-    let items = [...DEMONSTRATION_ASSESSMENTS];
-    if (params?.query?.trim()) {
-      const q = params.query.trim().toLowerCase();
-      items = items.filter(
-        (a) =>
-          a.title.toLowerCase().includes(q) ||
-          a.courseCode.toLowerCase().includes(q) ||
-          a.courseTitle.toLowerCase().includes(q) ||
-          a.description.toLowerCase().includes(q),
-      );
-    }
-    if (params?.courseCode) {
-      items = items.filter((a) => a.courseCode.toLowerCase() === params.courseCode?.toLowerCase());
-    }
-    if (params?.difficulty) {
-      items = items.filter((a) => a.difficulty === params.difficulty);
-    }
-    return items;
-  },
-
-  async getAssessment(id: string): Promise<PracticeAssessment | undefined> {
-    return DEMONSTRATION_ASSESSMENTS.find((a) => a.id === id);
-  },
-
-  calculateResult(
-    assessment: PracticeAssessment,
-    userAnswers: Record<string, 'A' | 'B' | 'C' | 'D'>,
-    durationSeconds: number,
-  ): AssessmentResult {
-    let correctCount = 0;
-    let answeredCount = 0;
-
-    assessment.questions.forEach((q) => {
-      const userChoice = userAnswers[q.id];
-      if (userChoice !== undefined) {
-        answeredCount += 1;
-        if (userChoice === q.correctAnswer) {
-          correctCount += 1;
-        }
-      }
-    });
-
-    const totalQuestions = assessment.questions.length;
-    const scorePercentage = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
-
-    let grade: AssessmentResult['grade'] = 'Fail';
-    if (scorePercentage >= 70) grade = 'Distinction';
-    else if (scorePercentage >= 60) grade = 'Credit';
-    else if (scorePercentage >= 50) grade = 'Pass';
-
-    return {
-      assessmentId: assessment.id,
-      totalQuestions,
-      answeredCount,
-      correctCount,
-      scorePercentage,
-      grade,
-      completedAt: new Date().toISOString(),
-      durationSeconds,
-      answers: { ...userAnswers },
-    };
-  },
+  list: () => apiRequest<PracticeConfig[]>('/assessments'),
+  start: (configId: number) => apiRequest<Attempt>(`/assessments/${configId}/attempts`, { method: 'POST' }),
+  getAttempt: (attemptId: number) => apiRequest<Attempt>(`/assessments/attempts/${attemptId}`),
+  saveAnswer: (attemptId: number, questionId: number, answerKey: string | null) =>
+    apiRequest<void>(`/assessments/attempts/${attemptId}/answers`, {
+      method: 'PUT',
+      body: JSON.stringify({ question_id: questionId, answer_key: answerKey }),
+    }),
+  submit: (attemptId: number) => apiRequest<AttemptResult>(`/assessments/attempts/${attemptId}/submit`, { method: 'POST' }),
+  results: (attemptId: number) => apiRequest<AttemptResult>(`/assessments/attempts/${attemptId}/results`),
 };
 
+export function lockMessage(reason: PracticeConfig['lock_reason']): string {
+  switch (reason) {
+    case 'sign_in_required':
+      return 'Sign in to take this test.';
+    case 'verification_required':
+      return 'Your student verification must be approved first.';
+    case 'subscription_required':
+      return 'An active subscription is required.';
+    default:
+      return '';
+  }
+}

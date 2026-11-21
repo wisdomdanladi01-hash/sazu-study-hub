@@ -7,6 +7,8 @@ import { HomePage } from '@/pages/HomePage';
 import { MaterialsPage } from '@/pages/MaterialsPage';
 import { CourseCataloguePage } from '@/pages/CourseCataloguePage';
 import { ResourceDetailPage } from '@/pages/ResourceDetailPage';
+import { ResourceViewerPage } from '@/pages/ResourceViewerPage';
+import { OfflineLibraryPage } from '@/pages/OfflineLibraryPage';
 import { PracticePage } from '@/pages/PracticePage';
 import { TestRunnerPage } from '@/pages/TestRunnerPage';
 import { HowItWorksPage } from '@/pages/HowItWorksPage';
@@ -29,6 +31,7 @@ import { AdminCsvImportPage } from '@/pages/admin/AdminCsvImportPage';
 import { AdminResourcesPage } from '@/pages/admin/AdminResourcesPage';
 import { AdminVerificationsPage } from '@/pages/admin/AdminVerificationsPage';
 import { AdminPackagesPage } from '@/pages/admin/AdminPackagesPage';
+import { AdminAssessmentsPage } from '@/pages/admin/AdminAssessmentsPage';
 
 const router = createBrowserRouter([
   {
@@ -37,6 +40,8 @@ const router = createBrowserRouter([
       { path: '/', element: <HomePage /> },
       { path: '/materials', element: <MaterialsPage /> },
       { path: '/materials/:id', element: <ResourceDetailPage /> },
+      { path: '/materials/:id/read', element: <ResourceViewerPage /> },
+      { path: '/offline', element: <OfflineLibraryPage /> },
       { path: '/courses', element: <CourseCataloguePage /> },
       { path: '/practice', element: <PracticePage /> },
       { path: '/practice/:id', element: <TestRunnerPage /> },
@@ -72,6 +77,7 @@ const router = createBrowserRouter([
       { path: 'resources', element: <AdminResourcesPage /> },
       { path: 'verification', element: <AdminVerificationsPage /> },
       { path: 'packages', element: <AdminPackagesPage /> },
+      { path: 'assessments', element: <AdminAssessmentsPage /> },
     ],
   },
   { path: '*', element: <NotFoundPage /> },

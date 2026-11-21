@@ -16,6 +16,9 @@ def configure_test_settings(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     monkeypatch.setattr(settings, "jwt_secret_key", "test-only-secret-key-with-at-least-32-bytes")
     monkeypatch.setattr(settings, "private_storage_dir", str(tmp_path / "private"))
     monkeypatch.setattr(settings, "verification_document_retention_days", 3)
+    # Existing tests exercise the download access rules. Students are blocked from raw downloads
+    # in production by default; the viewer tests switch this back off explicitly.
+    monkeypatch.setattr(settings, "student_downloads_enabled", True)
     monkeypatch.setattr(settings, "auth_rate_limit_requests", 10)
     monkeypatch.setattr(settings, "auth_rate_limit_window_seconds", 60)
     with rate_limit._lock:

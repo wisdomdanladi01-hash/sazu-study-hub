@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { catalogService } from '@/services/catalog';
 import { useAuth } from '@/auth/AuthContext';
 import { useRecentlyViewed } from '@/hooks/useRecentlyViewed';
-import { downloadResource, API_BASE_URL, ApiError } from '@/services/api';
+import { API_BASE_URL, ApiError } from '@/services/api';
 import type { CatalogResource } from '@/services/catalog';
 import type { ResourcePreview } from '@/types';
 import { Card } from '@/components/ui/Card';
@@ -34,6 +34,7 @@ import { formatRelative } from '@/utils/format';
 export function ResourceDetailPage() {
   const { id } = useParams();
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const recentlyViewed = useRecentlyViewed();
   const [authDialog, setAuthDialog] = useState(false);
   const [resource, setResource] = useState<CatalogResource | null>(null);
@@ -42,8 +43,7 @@ export function ResourceDetailPage() {
   const [previewAuthRequired, setPreviewAuthRequired] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
-  const [downloading, setDownloading] = useState(false);
+  const [downloadError] = useState<string | null>(null);
   const [copiedExcerpt, setCopiedExcerpt] = useState(false);
 
   useEffect(() => {
@@ -138,20 +138,13 @@ export function ResourceDetailPage() {
     );
   }
 
-  const handleDownload = async () => {
+  // Students read in the secure viewer (with offline saving); raw downloads are disabled.
+  const handleOpen = () => {
     if (!profile) {
       setAuthDialog(true);
       return;
     }
-    setDownloading(true);
-    setDownloadError(null);
-    try {
-      await downloadResource(resource.id);
-    } catch (cause) {
-      setDownloadError(cause instanceof Error ? cause.message : 'Unable to download this learning material.');
-    } finally {
-      setDownloading(false);
-    }
+    navigate(`/materials/${resource.id}/read`);
   };
 
   const handleCopyExcerpt = () => {
@@ -410,11 +403,10 @@ export function ResourceDetailPage() {
               <Button
                 fullWidth
                 variant="outline"
-                onClick={handleDownload}
-                loading={downloading}
-                leftIcon={<Download className="h-4 w-4" />}
+                onClick={handleOpen}
+                leftIcon={<Eye className="h-4 w-4" />}
               >
-                Download material
+                Open material
               </Button>
               <Link to={`/practice?course=${encodeURIComponent(resource.course.code)}`}>
                 <Button fullWidth variant="ghost" leftIcon={<ListChecks className="h-4 w-4" />}>
@@ -516,7 +508,7 @@ export function ResourceDetailPage() {
       <ProtectedActionDialog
         open={authDialog}
         onClose={() => setAuthDialog(false)}
-        reason="Sign in to download this learning material. Your subscription and verification status will be checked by the service."
+        reason="Sign in to open this learning material. Your subscription and verification status will be checked by the service."
         destination={`/materials/${resource.id}`}
       />
     </div>

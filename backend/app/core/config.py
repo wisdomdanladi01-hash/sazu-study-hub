@@ -107,6 +107,11 @@ class Settings(BaseSettings):
     default_semester_subscription_price_minor: int = Field(
         default=100_000, gt=0, alias="DEFAULT_SEMESTER_SUBSCRIPTION_PRICE_MINOR"
     )
+    student_downloads_enabled: bool = Field(default=False, alias="STUDENT_DOWNLOADS_ENABLED")
+    offline_enabled: bool = Field(default=True, alias="OFFLINE_ENABLED")
+    offline_max_days: int = Field(default=7, gt=0, le=60, alias="OFFLINE_MAX_DAYS")
+    viewer_max_pages: int = Field(default=500, gt=0, alias="VIEWER_MAX_PAGES")
+    viewer_page_scale: float = Field(default=1.6, gt=0.5, le=3.0, alias="VIEWER_PAGE_SCALE")
     auth_rate_limit_requests: int = Field(default=10, gt=0, alias="AUTH_RATE_LIMIT_REQUESTS")
     auth_rate_limit_window_seconds: int = Field(
         default=60, gt=0, alias="AUTH_RATE_LIMIT_WINDOW_SECONDS"
