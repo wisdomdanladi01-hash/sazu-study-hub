@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
@@ -71,6 +72,11 @@ class UserResponse(BaseModel):
     id: int
     email: EmailStr
     full_name: str
+    nickname: str | None = None
+    avatar_url: str | None = None
+    last_profile_edit_at: datetime | None = None
+    can_edit_profile_now: bool = True
+    next_profile_edit_at: datetime | None = None
     is_active: bool
     is_admin: bool = False
     is_superuser: bool = False
@@ -130,5 +136,7 @@ class AdminUserResponse(BaseModel):
 class UserProfileUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    email: EmailStr
-    full_name: str = Field(min_length=2, max_length=255)
+    email: EmailStr | None = None
+    full_name: str | None = Field(default=None, min_length=2, max_length=255)
+    nickname: str | None = Field(default=None, max_length=100)
+    avatar_url: str | None = Field(default=None, max_length=5000000)

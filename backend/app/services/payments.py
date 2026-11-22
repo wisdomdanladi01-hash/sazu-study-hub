@@ -88,7 +88,7 @@ def list_subscription_packages(
     results = []
     for pkg in packages:
         sem = db.get(Semester, pkg.semester_id) if pkg.semester_id else None
-        if not include_inactive and sem and sem.ends_on < now.date():
+        if not include_inactive and pkg.package_type in ("subscription", "semester") and sem and sem.ends_on < now.date():
             continue
         target_name = get_package_target_name(db, pkg)
         buyers_count, rev = get_package_metrics(db, pkg.id)

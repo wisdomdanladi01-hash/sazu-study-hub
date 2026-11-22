@@ -7,6 +7,11 @@ interface ApiUser {
   id: number;
   email: string;
   full_name: string;
+  nickname?: string | null;
+  avatar_url?: string | null;
+  last_profile_edit_at?: string | null;
+  can_edit_profile_now?: boolean;
+  next_profile_edit_at?: string | null;
   is_active: boolean;
   email_verified?: boolean;
   is_admin?: boolean;
@@ -51,7 +56,8 @@ interface AuthContextValue extends AuthState {
   }) => Promise<{ ok: boolean; error?: string }>;
   signOut: () => void;
   refreshProfile: () => Promise<void>;
-  updateProfile: (patch: Partial<Pick<StudentProfile, 'fullName' | 'email'>>) => Promise<void>;
+  updateProfile: (patch: { fullName?: string; nickname?: string; avatarUrl?: string }) => Promise<void>;
+  uploadAvatar: (file: File) => Promise<{ ok: boolean; error?: string }>;
   sendEmailVerificationCode: () => Promise<{ ok: boolean; error?: string; devCode?: string }>;
   verifyEmailCode: (code: string) => Promise<{ ok: boolean; error?: string }>;
 }
@@ -64,6 +70,11 @@ function mapProfile(user: ApiUser, dashboard: ApiDashboard): StudentProfile {
   return {
     id: String(user.id),
     fullName: user.full_name,
+    nickname: user.nickname,
+    avatarUrl: user.avatar_url,
+    lastProfileEditAt: user.last_profile_edit_at,
+    canEditProfileNow: user.can_edit_profile_now ?? true,
+    nextProfileEditAt: user.next_profile_edit_at,
     email: user.email,
     createdAt: '',
     academic: {
@@ -188,15 +199,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ profile: null, token: null, isLoading: false, authError: null });
   }, []);
 
-  const updateProfile = useCallback(async (patch: Partial<Pick<StudentProfile, 'fullName' | 'email'>>) => {
+  const updateProfile = useCallback(async (patch: { fullName?: string; nickname?: string; avatarUrl?: string }) => {
     if (!state.token || !state.profile) throw new Error('Sign in before updating your profile.');
     const updated = await apiRequest<ApiUser>(
       '/auth/me',
       {
         method: 'PATCH',
         body: JSON.stringify({
-          email: patch.email ?? state.profile.email,
           full_name: patch.fullName ?? state.profile.fullName,
+          nickname: patch.nickname !== undefined ? patch.nickname : (state.profile.nickname ?? null),
+          avatar_url: patch.avatarUrl !== undefined ? patch.avatarUrl : (state.profile.avatarUrl ?? null),
         }),
       },
       state.token,
@@ -208,12 +220,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             ...current.profile,
             email: updated.email,
             fullName: updated.full_name,
+            nickname: updated.nickname,
+            avatarUrl: updated.avatar_url,
+            lastProfileEditAt: updated.last_profile_edit_at,
+            canEditProfileNow: updated.can_edit_profile_now ?? true,
+            nextProfileEditAt: updated.next_profile_edit_at,
             isAdmin: Boolean(updated.is_admin),
             role: updated.role,
             emailVerified: Boolean(updated.email_verified),
           }
         : current.profile,
     }));
+  }, [state.profile, state.token]);
+
+  const uploadAvatar = useCallback(async (file: File) => {
+    if (!state.token || !state.profile) return { ok: false, error: 'Sign in before uploading avatar.' };
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${import.meta.env.VITE_API_URL || '/api/v1'}/auth/me/avatar`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${state.token}`,
+        },
+        body: formData,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || 'Unable to upload avatar.');
+      }
+      const updated = await res.json() as ApiUser;
+      setState((current) => ({
+        ...current,
+        profile: current.profile
+          ? {
+              ...current.profile,
+              avatarUrl: updated.avatar_url,
+              lastProfileEditAt: updated.last_profile_edit_at,
+              canEditProfileNow: updated.can_edit_profile_now ?? false,
+              nextProfileEditAt: updated.next_profile_edit_at,
+            }
+          : current.profile,
+      }));
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : 'Unable to upload avatar.' };
+    }
   }, [state.profile, state.token]);
 
   const sendEmailVerificationCode = useCallback(async () => {
@@ -249,9 +301,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signOut,
     refreshProfile,
     updateProfile,
+    uploadAvatar,
     sendEmailVerificationCode,
     verifyEmailCode,
-  }), [state, signIn, register, signOut, refreshProfile, updateProfile, sendEmailVerificationCode, verifyEmailCode]);
+  }), [state, signIn, register, signOut, refreshProfile, updateProfile, uploadAvatar, sendEmailVerificationCode, verifyEmailCode]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

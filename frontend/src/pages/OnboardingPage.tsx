@@ -257,13 +257,12 @@ export function OnboardingPage() {
           <button
             type="button"
             onClick={() => setStep(1)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              step === 1
-                ? 'bg-teal-700 text-white shadow-sm'
-                : profile.emailVerified
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${step === 1
+              ? 'bg-teal-700 text-white shadow-sm'
+              : profile.emailVerified
                 ? 'bg-teal-100 text-teal-800'
                 : 'bg-ink-100 text-ink-600'
-            }`}
+              }`}
           >
             <Mail className="h-4 w-4" />
             <span>1. Email Verification</span>
@@ -275,11 +274,10 @@ export function OnboardingPage() {
           <button
             type="button"
             onClick={() => setStep(2)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              step === 2
-                ? 'bg-teal-700 text-white shadow-sm'
-                : 'bg-ink-100 text-ink-600'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${step === 2
+              ? 'bg-teal-700 text-white shadow-sm'
+              : 'bg-ink-100 text-ink-600'
+              }`}
           >
             <GraduationCap className="h-4 w-4" />
             <span>2. Student Status Verification</span>

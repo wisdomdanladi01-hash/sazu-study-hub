@@ -136,8 +136,9 @@ async function fetchResources(query: ResourceQuery): Promise<CatalogResource[]> 
     const level = academicCatalogue.levels.find((item) => item.code === query.level);
     if (level) params.set('academic_level_id', String(level.id));
   }
-  const response = await apiRequest<{ items: ApiResource[]; total: number }>(`/resources?${params}`);
-  return response.items.map(mapResource);
+  const response = await apiRequest<ApiResource[] | { items: ApiResource[]; total: number }>(`/resources?${params}`);
+  const list = Array.isArray(response) ? response : (response?.items ?? []);
+  return list.map(mapResource);
 }
 
 export const catalogService = {
@@ -173,7 +174,7 @@ export const catalogService = {
 
   async getResource(id: string): Promise<CatalogResource | undefined> {
     try {
-      return mapResource(await apiRequest<ApiResource>(`/resources/catalogue/${encodeURIComponent(id)}`));
+      return mapResource(await apiRequest<ApiResource>(`/resources/${encodeURIComponent(id)}`));
     } catch (error) {
       if (error instanceof Error && 'status' in error && error.status === 404) return undefined;
       throw error;

@@ -167,10 +167,11 @@ def browse_resources(
     academic_level_id: Annotated[int | None, Query(gt=0)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
-    user: User = Depends(get_current_user),
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)] = None,
     db: Session = Depends(get_db),
 ) -> list[ResourceResponse]:
-    is_admin = _is_admin(db, user)
+    user = _get_optional_user(credentials, db)
+    is_admin = _is_admin(db, user) if user else False
     return list_resources(
         db,
         include_unpublished=is_admin,
@@ -183,14 +184,16 @@ def browse_resources(
     )
 
 
+@router.get("/catalogue/{resource_id}", response_model=ResourceResponse, include_in_schema=False)
 @router.get("/{resource_id}", response_model=ResourceResponse)
 def read_resource(
     resource_id: int,
-    user: User = Depends(get_current_user),
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)] = None,
     db: Session = Depends(get_db),
 ) -> ResourceResponse:
     resource = _get_resource_or_404(db, resource_id)
-    is_admin = _is_admin(db, user)
+    user = _get_optional_user(credentials, db)
+    is_admin = _is_admin(db, user) if user else False
     if not is_admin and not resource_is_available(resource):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found.")
     return resource

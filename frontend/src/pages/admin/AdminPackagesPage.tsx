@@ -133,7 +133,8 @@ export function AdminPackagesPage() {
     setEditingPackage(pkg);
     setPackageName(pkg.name);
     setPackageDesc(pkg.description || '');
-    setPackageType(pkg.package_type || 'semester');
+    const normalizedType = (pkg.package_type === 'subscription' || !pkg.package_type) ? 'semester' : pkg.package_type;
+    setPackageType(normalizedType);
     setPackageNairaPrice((pkg.price_minor / 100).toString());
     setPackageSubscriberNairaPrice(
       pkg.subscriber_price_minor ? (pkg.subscriber_price_minor / 100).toString() : ''

@@ -715,6 +715,7 @@ function UploadResourceModal({
           </div>
 
           <div
+            onClick={() => document.getElementById('resource-files-input')?.click()}
             onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={(e) => {
@@ -722,7 +723,7 @@ function UploadResourceModal({
               setIsDragging(false);
               if (e.dataTransfer.files) addFiles(e.dataTransfer.files);
             }}
-            className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all ${
+            className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all cursor-pointer ${
               isDragging ? 'border-teal-500 bg-teal-50/50' : 'border-ink-200 hover:border-teal-400 bg-ink-50/30'
             }`}
           >
@@ -739,11 +740,20 @@ function UploadResourceModal({
                 <Upload className="h-5 w-5" />
               </div>
               <p className="text-xs font-semibold text-ink-900">
-                Drag and drop your PDF or photographed test pages here, or{' '}
-                <label htmlFor="resource-files-input" className="text-teal-700 font-bold cursor-pointer hover:underline">
-                  browse files
-                </label>
+                Drag and drop your PDF or photographed test pages here, or click to choose files
               </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  document.getElementById('resource-files-input')?.click();
+                }}
+                leftIcon={<Upload className="h-3.5 w-3.5" />}
+              >
+                Choose files to upload
+              </Button>
               <p className="text-[11px] text-ink-500">
                 Supported formats: PDF (.pdf), JPEG (.jpg, .jpeg), PNG (.png), WebP (.webp). Max 50 MB.
               </p>

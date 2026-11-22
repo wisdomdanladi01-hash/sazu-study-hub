@@ -3,7 +3,7 @@ import os
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
@@ -60,10 +60,28 @@ def _user_response(user: User, db: Session) -> UserResponse:
     role_name = db.scalar(select(Role.name).where(Role.id == user.role_id)) if user.role_id else None
     caps = sorted(get_user_capabilities(user, db))
     is_admin = bool(user.is_superuser or (role_name and role_name in ROLE_CAPABILITIES))
+
+    now = datetime.now(timezone.utc)
+    can_edit = True
+    next_edit = None
+    if not user.is_superuser and user.last_profile_edit_at:
+        last_edit = user.last_profile_edit_at
+        if last_edit.tzinfo is None:
+            last_edit = last_edit.replace(tzinfo=timezone.utc)
+        cutoff = last_edit + timedelta(days=7)
+        if now < cutoff:
+            can_edit = False
+            next_edit = cutoff
+
     return UserResponse(
         id=user.id,
         email=user.email,
         full_name=user.full_name,
+        nickname=getattr(user, "nickname", None),
+        avatar_url=getattr(user, "avatar_url", None),
+        last_profile_edit_at=getattr(user, "last_profile_edit_at", None),
+        can_edit_profile_now=can_edit,
+        next_profile_edit_at=next_edit,
         is_active=user.is_active,
         is_admin=is_admin,
         is_superuser=user.is_superuser,
@@ -146,6 +164,95 @@ def read_current_user(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> UserResponse:
+    return _user_response(user, db)
+
+
+@router.patch("/me", response_model=UserResponse)
+def update_current_user_profile(
+    data: UserProfileUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserResponse:
+    now = datetime.now(timezone.utc)
+    if not user.is_superuser and user.last_profile_edit_at:
+        last_edit = user.last_profile_edit_at
+        if last_edit.tzinfo is None:
+            last_edit = last_edit.replace(tzinfo=timezone.utc)
+        cutoff = last_edit + timedelta(days=7)
+        if now < cutoff:
+            remaining_days = max(1, (cutoff.date() - now.date()).days)
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Profiles can only be edited once every 7 days. Next edit available in {remaining_days} day(s) on {cutoff.strftime('%b %d, %Y')}.",
+            )
+
+    updated = False
+    if data.full_name is not None and data.full_name.strip() and data.full_name.strip() != user.full_name:
+        user.full_name = data.full_name.strip()
+        updated = True
+    if data.nickname is not None and data.nickname.strip() != (user.nickname or ""):
+        user.nickname = data.nickname.strip() or None
+        updated = True
+    if data.avatar_url is not None and data.avatar_url.strip() != (user.avatar_url or ""):
+        user.avatar_url = data.avatar_url.strip() or None
+        updated = True
+
+    if updated:
+        user.last_profile_edit_at = now
+        db.add(
+            AuditEvent(
+                actor_user_id=user.id,
+                action="user.profile_updated",
+                target_type="user",
+                target_id=str(user.id),
+                event_metadata={
+                    "full_name": user.full_name,
+                    "nickname": user.nickname,
+                    "has_avatar": bool(user.avatar_url),
+                },
+            )
+        )
+        db.commit()
+        db.refresh(user)
+
+    return _user_response(user, db)
+
+
+@router.post("/me/avatar", response_model=UserResponse)
+async def upload_avatar(
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserResponse:
+    allowed_types = {"image/jpeg", "image/png", "image/webp"}
+    content_type = (file.content_type or "").lower()
+    if content_type not in allowed_types:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Only JPEG, PNG, and WebP images are supported for profile avatars.",
+        )
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Avatar image size cannot exceed 5 MB.",
+        )
+    import base64
+    b64 = base64.b64encode(content).decode("utf-8")
+    data_uri = f"data:{content_type};base64,{b64}"
+    user.avatar_url = data_uri
+    user.last_profile_edit_at = datetime.now(timezone.utc)
+    db.add(
+        AuditEvent(
+            actor_user_id=user.id,
+            action="user.avatar_updated",
+            target_type="user",
+            target_id=str(user.id),
+            event_metadata={"size_bytes": len(content), "mime_type": content_type},
+        )
+    )
+    db.commit()
+    db.refresh(user)
     return _user_response(user, db)
 
 

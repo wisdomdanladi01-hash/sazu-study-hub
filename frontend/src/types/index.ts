@@ -76,6 +76,11 @@ export interface AcademicProfile {
 export interface StudentProfile {
   id: ID;
   fullName: string;
+  nickname?: string | null;
+  avatarUrl?: string | null;
+  lastProfileEditAt?: string | null;
+  canEditProfileNow?: boolean;
+  nextProfileEditAt?: string | null;
   email: string;
   createdAt: string;
   academic: AcademicProfile;
