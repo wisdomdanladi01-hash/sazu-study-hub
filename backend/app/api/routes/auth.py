@@ -4,6 +4,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -102,6 +103,12 @@ def register(
             detail="Registration is temporarily unavailable because the database could not be reached. Check DATABASE_URL and PostgreSQL.",
         ) from exc
     return AccessTokenResponse(access_token=create_access_token(user.id))
+
+
+@router.get("/login", include_in_schema=False)
+def login_get_redirect():
+    """If visited via browser URL bar (GET request), redirect to the frontend login interface."""
+    return RedirectResponse(url="/login")
 
 
 @router.post("/login", response_model=AccessTokenResponse)

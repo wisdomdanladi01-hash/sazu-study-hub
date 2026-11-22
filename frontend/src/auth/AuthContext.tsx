@@ -39,7 +39,7 @@ interface AuthState {
 interface AuthContextValue extends AuthState {
   isAuthenticated: boolean;
   isAdmin: boolean;
-  signIn: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  signIn: (email: string, password: string) => Promise<{ ok: boolean; error?: string; profile?: StudentProfile }>;
   register: (input: {
     firstName: string;
     middleName?: string;
@@ -140,7 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAccessToken(result.access_token);
       const profile = await fetchProfile(result.access_token);
       setState({ profile, token: result.access_token, isLoading: false, authError: null });
-      return { ok: true };
+      return { ok: true, profile };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : 'Unable to sign in.' };
     }

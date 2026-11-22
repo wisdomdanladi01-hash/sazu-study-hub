@@ -34,7 +34,13 @@ export function LoginPage() {
     const result = await signIn(email, password);
     setLoading(false);
     if (result.ok) {
-      navigate(redirect ? decodeURIComponent(redirect) : '/dashboard', { replace: true });
+      if (redirect) {
+        navigate(decodeURIComponent(redirect), { replace: true });
+      } else if (result.profile?.isAdmin) {
+        navigate('/admin', { replace: true });
+      } else {
+        navigate('/dashboard', { replace: true });
+      }
     } else {
       setError(result.error ?? 'Unable to sign in. Please verify your credentials.');
     }
