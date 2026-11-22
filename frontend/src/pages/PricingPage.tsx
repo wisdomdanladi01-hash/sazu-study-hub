@@ -412,7 +412,7 @@ export function PricingPage() {
                       <span className="text-xs font-normal text-ink-500">/ course</span>
                     </div>
                     {primaryCoursePkg.effective_price_minor != null &&
-                    primaryCoursePkg.effective_price_minor < primaryCoursePkg.price_minor ? (
+                      primaryCoursePkg.effective_price_minor < primaryCoursePkg.price_minor ? (
                       <Badge tone="green" className="mt-1 text-xs">
                         Subscriber Discount Applied
                       </Badge>

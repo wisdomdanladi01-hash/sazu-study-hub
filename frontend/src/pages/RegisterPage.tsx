@@ -200,9 +200,8 @@ export function RegisterPage() {
                       return (
                         <p
                           key={r.label}
-                          className={`flex items-center gap-1.5 text-xs ${
-                            ok ? 'text-teal-700 font-semibold' : 'text-ink-500'
-                          }`}
+                          className={`flex items-center gap-1.5 text-xs ${ok ? 'text-teal-700 font-semibold' : 'text-ink-500'
+                            }`}
                         >
                           {ok ? (
                             <Check className="h-3.5 w-3.5 text-teal-600" />
