@@ -12,11 +12,13 @@ export interface AdminSubscriptionPackage {
   id: number;
   name: string;
   description: string | null;
-  package_type: 'subscription' | 'semester' | 'session' | 'course' | 'resource' | 'resource_package';
+  package_type: 'subscription' | 'semester' | 'session' | 'level' | 'course' | 'resource' | 'resource_package';
   price_minor: number;
+  subscriber_price_minor?: number | null;
   currency: string;
   semester_id: number | null;
   academic_session_id: number | null;
+  academic_level_id?: number | null;
   course_id: number | null;
   resource_id: number | null;
   target_name?: string | null;
@@ -361,9 +363,11 @@ export const adminService = {
     description?: string | null;
     package_type: string;
     price_minor: number;
+    subscriber_price_minor?: number | null;
     currency: string;
     semester_id?: number | null;
     academic_session_id?: number | null;
+    academic_level_id?: number | null;
     course_id?: number | null;
     resource_id?: number | null;
     available_from?: string | null;
@@ -380,15 +384,24 @@ export const adminService = {
     description?: string | null;
     package_type?: string;
     price_minor?: number;
+    subscriber_price_minor?: number | null;
     semester_id?: number | null;
     academic_session_id?: number | null;
+    academic_level_id?: number | null;
     course_id?: number | null;
     resource_id?: number | null;
+    available_from?: string | null;
+    available_until?: string | null;
     is_active?: boolean;
   }): Promise<AdminSubscriptionPackage> {
     return apiRequest<AdminSubscriptionPackage>(`/admin/subscriptions/packages/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
+    });
+  },
+  async deletePackage(id: number): Promise<{ message: string }> {
+    return apiRequest<{ message: string }>(`/admin/subscriptions/packages/${id}`, {
+      method: 'DELETE',
     });
   },
 

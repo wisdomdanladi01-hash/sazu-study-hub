@@ -85,6 +85,7 @@ export interface StudentProfile {
   role?: string;
   permissions?: string[];
   isSuperuser?: boolean;
+  emailVerified?: boolean;
 }
 
 export interface AcademicCatalogue {

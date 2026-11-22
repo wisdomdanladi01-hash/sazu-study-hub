@@ -125,7 +125,7 @@ def test_registration_requires_first_name_surname_and_one_student_identifier(cli
             "matriculation_number": "MAT-001",
         },
     )
-    missing_identifier = client.post(
+    without_identifier = client.post(
         "/api/v1/auth/register",
         json={
             "email": "missing-id@example.com",
@@ -136,7 +136,8 @@ def test_registration_requires_first_name_surname_and_one_student_identifier(cli
     )
 
     assert missing_name.status_code == 422
-    assert missing_identifier.status_code == 422
+    # Streamlined registration permits account creation before student ID submission
+    assert without_identifier.status_code == 201
 
 
 def test_student_cannot_submit_verified_level_or_access_admin_queue(client, db_session):

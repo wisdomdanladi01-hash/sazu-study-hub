@@ -47,8 +47,6 @@ class StudentRegistration(BaseModel):
             self.jamb_registration_number
         )
         self.matriculation_number = self._normalize_identifier(self.matriculation_number)
-        if not self.jamb_registration_number and not self.matriculation_number:
-            raise ValueError("Provide a JAMB registration number or matriculation number.")
         return self
 
     @staticmethod
@@ -77,7 +75,19 @@ class UserResponse(BaseModel):
     is_admin: bool = False
     is_superuser: bool = False
     role: str | None = None
+    email_verified: bool = False
     permissions: list[str] = []
+
+
+class EmailVerificationSendResponse(BaseModel):
+    message: str
+    email: str
+    expires_in_minutes: int
+    dev_code: str | None = None
+
+
+class EmailVerificationCodeRequest(BaseModel):
+    code: str = Field(min_length=4, max_length=10)
 
 
 class RoleResponse(BaseModel):

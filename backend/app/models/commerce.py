@@ -18,12 +18,12 @@ class AccessPackage(Base):
     __tablename__ = "access_packages"
     __table_args__ = (
         CheckConstraint(
-            "package_type IN ('subscription', 'semester', 'session', 'course', 'resource', 'resource_package')",
+            "package_type IN ('subscription', 'semester', 'session', 'level', 'course', 'resource', 'resource_package')",
             name="ck_access_package_type",
         ),
         CheckConstraint("price_minor >= 0", name="ck_access_package_price_nonnegative"),
         CheckConstraint(
-            "is_active = false OR semester_id IS NOT NULL OR academic_session_id IS NOT NULL OR course_id IS NOT NULL OR resource_id IS NOT NULL",
+            "is_active = false OR semester_id IS NOT NULL OR academic_session_id IS NOT NULL OR academic_level_id IS NOT NULL OR course_id IS NOT NULL OR resource_id IS NOT NULL",
             name="ck_active_package_target",
         ),
     )
@@ -33,10 +33,14 @@ class AccessPackage(Base):
     description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     package_type: Mapped[str] = mapped_column(String(30), nullable=False)
     price_minor: Mapped[int] = mapped_column(Integer, nullable=False)
+    subscriber_price_minor: Mapped[int | None] = mapped_column(Integer, nullable=True)
     currency: Mapped[str] = mapped_column(String(3), default="NGN", nullable=False)
     semester_id: Mapped[int | None] = mapped_column(ForeignKey("semesters.id"), nullable=True, index=True)
     academic_session_id: Mapped[int | None] = mapped_column(
         ForeignKey("academic_sessions.id"), nullable=True, index=True
+    )
+    academic_level_id: Mapped[int | None] = mapped_column(
+        ForeignKey("academic_levels.id"), nullable=True, index=True
     )
     course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id"), nullable=True, index=True)
     resource_id: Mapped[int | None] = mapped_column(ForeignKey("resources.id"), nullable=True, index=True)

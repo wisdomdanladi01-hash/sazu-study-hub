@@ -50,7 +50,7 @@ export function ResourceDetailPage() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   useEffect(() => {
-    paymentService.listPackages().then(setPackages).catch(() => {});
+    paymentService.listPackages().then(setPackages).catch(() => { });
   }, []);
 
   const unlockingPlans = packages.filter((p) => {
@@ -534,8 +534,8 @@ export function ResourceDetailPage() {
                   preview?.preview_available
                     ? `${preview.preview_type === 'text' ? 'Text Excerpt' : preview.preview_type === 'image' ? 'Sample Image' : 'PDF Sample'}`
                     : previewAuthRequired
-                    ? 'Requires sign-in'
-                    : 'Not published'
+                      ? 'Requires sign-in'
+                      : 'Not published'
                 }
               />
             </dl>

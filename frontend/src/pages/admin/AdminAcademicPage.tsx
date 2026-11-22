@@ -140,51 +140,46 @@ export function AdminAcademicPage() {
       <div className="border-b border-ink-200 flex gap-2 overflow-x-auto">
         <button
           onClick={() => { setTab('sessions'); setSearch(''); }}
-          className={`pb-3 px-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${
-            tab === 'sessions'
-              ? 'border-teal-600 text-teal-800'
-              : 'border-transparent text-ink-500 hover:text-ink-800'
-          }`}
+          className={`pb-3 px-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${tab === 'sessions'
+            ? 'border-teal-600 text-teal-800'
+            : 'border-transparent text-ink-500 hover:text-ink-800'
+            }`}
         >
           Academic Sessions ({sessions.length})
         </button>
         <button
           onClick={() => { setTab('semesters'); setSearch(''); }}
-          className={`pb-3 px-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${
-            tab === 'semesters'
-              ? 'border-teal-600 text-teal-800'
-              : 'border-transparent text-ink-500 hover:text-ink-800'
-          }`}
+          className={`pb-3 px-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${tab === 'semesters'
+            ? 'border-teal-600 text-teal-800'
+            : 'border-transparent text-ink-500 hover:text-ink-800'
+            }`}
         >
           Semesters ({semesters.length})
         </button>
         <button
           onClick={() => { setTab('faculties'); setSearch(''); }}
-          className={`pb-3 px-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${
-            tab === 'faculties'
-              ? 'border-teal-600 text-teal-800'
-              : 'border-transparent text-ink-500 hover:text-ink-800'
-          }`}
+          className={`pb-3 px-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${tab === 'faculties'
+            ? 'border-teal-600 text-teal-800'
+            : 'border-transparent text-ink-500 hover:text-ink-800'
+            }`}
         >
           Faculties ({faculties.length})
         </button>
         <button
           onClick={() => { setTab('departments'); setSearch(''); }}
-          className={`pb-3 px-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${
-            tab === 'departments'
-              ? 'border-teal-600 text-teal-800'
-              : 'border-transparent text-ink-500 hover:text-ink-800'
-          }`}
+          className={`pb-3 px-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${tab === 'departments'
+            ? 'border-teal-600 text-teal-800'
+            : 'border-transparent text-ink-500 hover:text-ink-800'
+            }`}
         >
           Departments ({departments.length})
         </button>
         <button
           onClick={() => { setTab('programmes'); setSearch(''); }}
-          className={`pb-3 px-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${
-            tab === 'programmes'
-              ? 'border-teal-600 text-teal-800'
-              : 'border-transparent text-ink-500 hover:text-ink-800'
-          }`}
+          className={`pb-3 px-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${tab === 'programmes'
+            ? 'border-teal-600 text-teal-800'
+            : 'border-transparent text-ink-500 hover:text-ink-800'
+            }`}
         >
           Programmes ({programmes.length})
         </button>

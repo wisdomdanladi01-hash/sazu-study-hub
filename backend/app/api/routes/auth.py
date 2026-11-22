@@ -1,4 +1,7 @@
 import logging
+import os
+import secrets
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
@@ -28,12 +31,15 @@ from app.schemas.auth import (
     AdminRoleUpdate,
     AdminUserCreate,
     AdminUserResponse,
+    EmailVerificationCodeRequest,
+    EmailVerificationSendResponse,
     LoginRequest,
     RoleResponse,
     StudentRegistration,
     UserProfileUpdate,
     UserResponse,
 )
+from app.services.email import send_email_otp
 from app.services.errors import ConflictError, PolicyError
 from app.services.verification import register_student
 
@@ -61,6 +67,7 @@ def _user_response(user: User, db: Session) -> UserResponse:
         is_admin=is_admin,
         is_superuser=user.is_superuser,
         role=role_name or ("admin" if is_admin else "student"),
+        email_verified=bool(getattr(user, "email_verified", False)),
         permissions=caps,
     )
 
@@ -132,6 +139,71 @@ def read_current_user(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> UserResponse:
+    return _user_response(user, db)
+
+
+@router.post("/email/send-code", response_model=EmailVerificationSendResponse)
+def send_email_verification_code(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> EmailVerificationSendResponse:
+    """Generate and dispatch a 6-digit email verification OTP."""
+    code = f"{secrets.randbelow(900000) + 100000}"
+    user.email_verification_code = code
+    user.email_verification_expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+    db.commit()
+
+    send_email_otp(user.email, user.full_name, code)
+    dev_mode = not (os.getenv("SMTP_HOST") and os.getenv("SMTP_USER"))
+
+    return EmailVerificationSendResponse(
+        message=f"A 6-digit verification code has been sent to {user.email}.",
+        email=user.email,
+        expires_in_minutes=15,
+        dev_code=code if dev_mode else None,
+    )
+
+
+@router.post("/email/verify", response_model=UserResponse)
+def verify_email_code(
+    data: EmailVerificationCodeRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserResponse:
+    """Verify the 6-digit email OTP and mark the user's email as confirmed."""
+    now = datetime.now(timezone.utc)
+    if (
+        not user.email_verification_code
+        or not user.email_verification_expires_at
+        or user.email_verification_expires_at <= now
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The verification code has expired or was not requested. Please request a new code.",
+        )
+
+    if user.email_verification_code.strip() != data.code.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid verification code. Please check and try again.",
+        )
+
+    user.email_verified = True
+    user.email_verification_code = None
+    user.email_verification_expires_at = None
+
+    db.add(
+        AuditEvent(
+            actor_user_id=user.id,
+            action="user.email_verified",
+            target_type="user",
+            target_id=str(user.id),
+            event_metadata={"email": user.email},
+        )
+    )
+    db.commit()
+    db.refresh(user)
+
     return _user_response(user, db)
 
 

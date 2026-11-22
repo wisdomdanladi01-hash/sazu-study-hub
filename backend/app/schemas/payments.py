@@ -4,7 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
-PackageType = Literal["subscription", "semester", "session", "course", "resource", "resource_package"]
+PackageType = Literal["subscription", "semester", "session", "level", "course", "resource", "resource_package"]
 PaymentStatus = Literal["pending", "succeeded", "failed", "refunded", "disputed"]
 SubscriptionStatus = Literal["pending", "active", "expired", "cancelled", "revoked"]
 
@@ -16,9 +16,11 @@ class SubscriptionPackageCreate(BaseModel):
     description: str | None = Field(default=None, max_length=1000)
     package_type: PackageType = "semester"
     price_minor: int = Field(gt=0)
+    subscriber_price_minor: int | None = Field(default=None, ge=0)
     currency: str = Field(default="NGN", min_length=3, max_length=3)
     semester_id: int | None = Field(default=None, gt=0)
     academic_session_id: int | None = Field(default=None, gt=0)
+    academic_level_id: int | None = Field(default=None, gt=0)
     course_id: int | None = Field(default=None, gt=0)
     resource_id: int | None = Field(default=None, gt=0)
     available_from: datetime | None = None
@@ -49,6 +51,8 @@ class SubscriptionPackageCreate(BaseModel):
             raise ValueError("A semester must be selected for semester subscription packages.")
         if self.package_type == "session" and not self.academic_session_id:
             raise ValueError("An academic session must be selected for session pass packages.")
+        if self.package_type == "level" and not self.academic_level_id:
+            raise ValueError("An academic level must be selected for level pass packages.")
         if self.package_type == "course" and not self.course_id:
             raise ValueError("A course must be selected for course pass packages.")
         if self.package_type in ("resource", "resource_package") and not self.resource_id:
@@ -63,9 +67,11 @@ class SubscriptionPackageUpdate(BaseModel):
     description: str | None = Field(default=None, max_length=1000)
     package_type: PackageType | None = None
     price_minor: int | None = Field(default=None, gt=0)
+    subscriber_price_minor: int | None = Field(default=None, ge=0)
     currency: str | None = Field(default=None, min_length=3, max_length=3)
     semester_id: int | None = Field(default=None, gt=0)
     academic_session_id: int | None = Field(default=None, gt=0)
+    academic_level_id: int | None = Field(default=None, gt=0)
     course_id: int | None = Field(default=None, gt=0)
     resource_id: int | None = Field(default=None, gt=0)
     available_from: datetime | None = None
@@ -107,9 +113,12 @@ class SubscriptionPackageResponse(BaseModel):
     description: str | None
     package_type: str
     price_minor: int
+    subscriber_price_minor: int | None = None
+    effective_price_minor: int | None = None
     currency: str
     semester_id: int | None = None
     academic_session_id: int | None = None
+    academic_level_id: int | None = None
     course_id: int | None = None
     resource_id: int | None = None
     target_name: str | None = None

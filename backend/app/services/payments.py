@@ -5,7 +5,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.models.academic import AcademicSession, Course, Semester, StudentAcademicProfile
+from app.models.academic import AcademicLevel, AcademicSession, Course, Semester, StudentAcademicProfile
 from app.models.audit import AuditEvent
 from app.models.commerce import AccessPackage, Entitlement, PackageCourse, PackageResource, Payment
 from app.models.resource import Resource
@@ -49,6 +49,9 @@ def get_package_target_name(db: Session, package: AccessPackage) -> str:
     elif package.package_type == "session" and package.academic_session_id:
         sess = db.get(AcademicSession, package.academic_session_id)
         return f"Academic Session {sess.name}" if sess else f"Session {package.academic_session_id}"
+    elif package.package_type == "level" and package.academic_level_id:
+        lvl = db.get(AcademicLevel, package.academic_level_id)
+        return f"{lvl.name} Level Pass" if lvl else f"Level {package.academic_level_id}"
     elif package.package_type == "course" and package.course_id:
         course = db.get(Course, package.course_id)
         return f"{course.code} - {course.title}" if course else f"Course {package.course_id}"
@@ -102,8 +105,10 @@ def create_subscription_package(
     price_minor: int,
     currency: str,
     package_type: str = "semester",
+    subscriber_price_minor: int | None = None,
     semester_id: int | None = None,
     academic_session_id: int | None = None,
+    academic_level_id: int | None = None,
     course_id: int | None = None,
     resource_id: int | None = None,
     available_from: datetime | None = None,
@@ -118,6 +123,9 @@ def create_subscription_package(
     elif package_type == "session":
         if not academic_session_id or db.get(AcademicSession, academic_session_id) is None:
             raise PolicyError("The selected academic session does not exist.")
+    elif package_type == "level":
+        if not academic_level_id or db.get(AcademicLevel, academic_level_id) is None:
+            raise PolicyError("The selected academic level does not exist.")
     elif package_type == "course":
         if not course_id or db.get(Course, course_id) is None:
             raise PolicyError("The selected course does not exist.")
@@ -139,9 +147,11 @@ def create_subscription_package(
         description=description,
         package_type=package_type,
         price_minor=price_minor,
+        subscriber_price_minor=subscriber_price_minor,
         currency=currency,
         semester_id=semester_id,
         academic_session_id=academic_session_id,
+        academic_level_id=academic_level_id,
         course_id=course_id,
         resource_id=resource_id,
         available_from=available_from,
@@ -161,7 +171,11 @@ def create_subscription_package(
                 action="admin.subscription_package_created",
                 target_type="access_package",
                 target_id=str(package.id),
-                event_metadata={"package_type": package_type, "price_minor": price_minor},
+                event_metadata={
+                    "package_type": package_type,
+                    "price_minor": price_minor,
+                    "subscriber_price_minor": subscriber_price_minor,
+                },
             )
         )
         db.commit()
@@ -178,6 +192,7 @@ def update_subscription_package(
     effective_type = changes.get("package_type", package.package_type)
     effective_semester_id = changes.get("semester_id", package.semester_id)
     effective_session_id = changes.get("academic_session_id", package.academic_session_id)
+    effective_level_id = changes.get("academic_level_id", package.academic_level_id)
     effective_course_id = changes.get("course_id", package.course_id)
     effective_resource_id = changes.get("resource_id", package.resource_id)
 
@@ -187,6 +202,9 @@ def update_subscription_package(
     elif effective_type == "session" and effective_session_id is not None:
         if db.get(AcademicSession, effective_session_id) is None:
             raise PolicyError("The selected academic session does not exist.")
+    elif effective_type == "level" and effective_level_id is not None:
+        if db.get(AcademicLevel, effective_level_id) is None:
+            raise PolicyError("The selected academic level does not exist.")
     elif effective_type == "course" and effective_course_id is not None:
         if db.get(Course, effective_course_id) is None:
             raise PolicyError("The selected course does not exist.")
@@ -247,6 +265,43 @@ def update_subscription_package(
         raise ConflictError("A package with this name already exists.") from exc
 
 
+def delete_subscription_package(db: Session, admin: User, package: AccessPackage) -> None:
+    """Delete a subscription package, or deactivate it if referenced by payments."""
+    has_payments = db.scalar(
+        select(Payment.id).where(Payment.package_id == package.id).limit(1)
+    ) is not None
+
+    if has_payments:
+        package.is_active = False
+        db.add(
+            AuditEvent(
+                actor_user_id=admin.id,
+                action="admin.subscription_package_deactivated",
+                target_type="access_package",
+                target_id=str(package.id),
+                event_metadata={"reason": "Has associated payment history; deactivated instead of deleted."},
+            )
+        )
+        db.commit()
+    else:
+        # Clean up associations
+        for pc in db.scalars(select(PackageCourse).where(PackageCourse.package_id == package.id)).all():
+            db.delete(pc)
+        for pr in db.scalars(select(PackageResource).where(PackageResource.package_id == package.id)).all():
+            db.delete(pr)
+        db.delete(package)
+        db.add(
+            AuditEvent(
+                actor_user_id=admin.id,
+                action="admin.subscription_package_deleted",
+                target_type="access_package",
+                target_id=str(package.id),
+                event_metadata={"name": package.name},
+            )
+        )
+        db.commit()
+
+
 def get_subscription_package(db: Session, package_id: int) -> AccessPackage:
     package = db.get(AccessPackage, package_id)
     if package is None:
@@ -275,6 +330,23 @@ def _has_active_subscription(
             .where(
                 Subscription.user_id == user_id,
                 Subscription.semester_id == semester_id,
+                Subscription.status == "active",
+                Subscription.is_active.is_(True),
+                Subscription.starts_at <= now,
+                Subscription.ends_at > now,
+            )
+            .limit(1)
+        )
+        is not None
+    )
+
+
+def _user_has_any_active_subscription(db: Session, user_id: int, now: datetime) -> bool:
+    return (
+        db.scalar(
+            select(Subscription.id)
+            .where(
+                Subscription.user_id == user_id,
                 Subscription.status == "active",
                 Subscription.is_active.is_(True),
                 Subscription.starts_at <= now,
@@ -338,6 +410,27 @@ def initialize_payment(
         if has_session is not None:
             raise ConflictError("You already have an active pass for this academic session.")
 
+    elif package.package_type == "level":
+        if package.academic_level_id is None:
+            raise PolicyError("This package has no academic level assigned.")
+        level_obj = db.get(AcademicLevel, package.academic_level_id)
+        if level_obj is None:
+            raise PolicyError("The package academic level no longer exists.")
+        has_level = db.scalar(
+            select(Entitlement.id)
+            .join(Payment, Payment.id == Entitlement.payment_id)
+            .where(
+                Entitlement.user_id == user.id,
+                Entitlement.package_id == package.id,
+                Entitlement.status == "active",
+                Payment.status == "succeeded",
+                or_(Entitlement.expires_at.is_(None), Entitlement.expires_at > now),
+            )
+            .limit(1)
+        )
+        if has_level is not None:
+            raise ConflictError("You already have an active pass for this academic level.")
+
     elif package.package_type == "course":
         if package.course_id is None:
             raise PolicyError("This package has no course assigned.")
@@ -356,6 +449,13 @@ def initialize_payment(
         if paid_ent is not None:
             raise ConflictError("You already have an active pass for this resource.")
 
+    is_active_subscriber = _user_has_any_active_subscription(db, user.id, now)
+    effective_amount_minor = (
+        package.subscriber_price_minor
+        if (is_active_subscriber and package.subscriber_price_minor is not None)
+        else package.price_minor
+    )
+
     reference = f"LRP-{uuid4().hex}"
     payment = Payment(
         user_id=user.id,
@@ -365,7 +465,7 @@ def initialize_payment(
         provider_reference=reference,
         idempotency_key=reference,
         status="pending",
-        amount_minor=package.price_minor,
+        amount_minor=effective_amount_minor,
         currency=package.currency,
     )
     try:
@@ -633,6 +733,28 @@ def verify_payment(
                 package_id=package.id,
                 scope_key=f"session:{session_obj.id}:{payment.id}",
                 expires_at=session_end,
+                status="active",
+            )
+        )
+
+    elif pkg_type == "level":
+        level_obj = db.get(AcademicLevel, package.academic_level_id)
+        if level_obj is None:
+            payment.status = "succeeded"
+            payment.verified_at = now
+            payment.refund_review_status = "pending"
+            payment.failure_reason = "Verified payment has no valid academic level; manual reconciliation is required."
+            db.commit()
+            return payment, None
+
+        level_expires = now + timedelta(days=365)
+        db.add(
+            Entitlement(
+                user_id=payment.user_id,
+                payment_id=payment.id,
+                package_id=package.id,
+                scope_key=f"level:{level_obj.id}:{payment.id}",
+                expires_at=level_expires,
                 status="active",
             )
         )

@@ -4,11 +4,14 @@ export interface SubscriptionPackage {
   id: number;
   name: string;
   description: string | null;
-  package_type: 'subscription' | 'semester' | 'session' | 'course' | 'resource' | 'resource_package';
+  package_type: 'subscription' | 'semester' | 'session' | 'level' | 'course' | 'resource' | 'resource_package';
   price_minor: number;
+  subscriber_price_minor?: number | null;
+  effective_price_minor?: number | null;
   currency: string;
   semester_id?: number | null;
   academic_session_id?: number | null;
+  academic_level_id?: number | null;
   course_id?: number | null;
   resource_id?: number | null;
   target_name?: string | null;

@@ -5,10 +5,8 @@ import {
   Plus,
   RefreshCw,
   CheckCircle2,
-  AlertCircle,
-  X,
   Edit2,
-  Receipt,
+  Trash2,
   GraduationCap,
   Calendar,
   Layers,
@@ -23,6 +21,7 @@ import {
   type AdminSemester,
   type AdminSubscriptionPackage,
 } from '@/services/admin';
+import { catalogService } from '@/services/catalog';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -49,6 +48,7 @@ export function AdminPackagesPage() {
   const [semesters, setSemesters] = useState<AdminSemester[]>([]);
   const [courses, setCourses] = useState<AdminCourse[]>([]);
   const [resources, setResources] = useState<AdminResourceItem[]>([]);
+  const [levels, setLevels] = useState<Array<{ id: number; name: string; code: string }>>([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,12 +58,17 @@ export function AdminPackagesPage() {
   // Create / Edit Modal State
   const [modalOpen, setModalOpen] = useState(false);
   const [editingPackage, setEditingPackage] = useState<AdminSubscriptionPackage | null>(null);
+  const [deleteModalPackage, setDeleteModalPackage] = useState<AdminSubscriptionPackage | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const [packageName, setPackageName] = useState('');
   const [packageDesc, setPackageDesc] = useState('');
   const [packageType, setPackageType] = useState<string>('semester');
   const [packageNairaPrice, setPackageNairaPrice] = useState('1500');
+  const [packageSubscriberNairaPrice, setPackageSubscriberNairaPrice] = useState('');
   const [packageSemesterId, setPackageSemesterId] = useState<string>('');
   const [packageSessionId, setPackageSessionId] = useState<string>('');
+  const [packageLevelId, setPackageLevelId] = useState<string>('');
   const [packageCourseId, setPackageCourseId] = useState<string>('');
   const [packageResourceId, setPackageResourceId] = useState<string>('');
   const [availableFrom, setAvailableFrom] = useState('');
@@ -76,13 +81,14 @@ export function AdminPackagesPage() {
     try {
       setLoading(true);
       setError(null);
-      const [pkgs, pms, sessList, semList, cList, rList] = await Promise.all([
+      const [pkgs, pms, sessList, semList, cList, rList, cat] = await Promise.all([
         adminService.listPackages(),
         adminService.listPayments().catch(() => [] as PaymentRecord[]),
         adminService.listSessions().catch(() => [] as AdminAcademicSession[]),
         adminService.listSemesters().catch(() => [] as AdminSemester[]),
         adminService.listCourses().catch(() => [] as AdminCourse[]),
         adminService.listResources().catch(() => [] as AdminResourceItem[]),
+        catalogService.getAcademicCatalogue().catch(() => null),
       ]);
       setPackages(pkgs);
       setPayments(pms);
@@ -90,6 +96,9 @@ export function AdminPackagesPage() {
       setSemesters(semList);
       setCourses(cList);
       setResources(rList);
+      if (cat?.levels) {
+        setLevels(cat.levels);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load subscription packages');
     } finally {
@@ -107,8 +116,10 @@ export function AdminPackagesPage() {
     setPackageDesc('');
     setPackageType('semester');
     setPackageNairaPrice('1500');
+    setPackageSubscriberNairaPrice('');
     setPackageSemesterId(semesters[0]?.id ? String(semesters[0].id) : '');
     setPackageSessionId(sessions[0]?.id ? String(sessions[0].id) : '');
+    setPackageLevelId(levels[0]?.id ? String(levels[0].id) : '');
     setPackageCourseId(courses[0]?.id ? String(courses[0].id) : '');
     setPackageResourceId(resources[0]?.id ? String(resources[0].id) : '');
     setAvailableFrom('');
@@ -124,8 +135,12 @@ export function AdminPackagesPage() {
     setPackageDesc(pkg.description || '');
     setPackageType(pkg.package_type || 'semester');
     setPackageNairaPrice((pkg.price_minor / 100).toString());
+    setPackageSubscriberNairaPrice(
+      pkg.subscriber_price_minor ? (pkg.subscriber_price_minor / 100).toString() : ''
+    );
     setPackageSemesterId(pkg.semester_id ? String(pkg.semester_id) : (semesters[0]?.id ? String(semesters[0].id) : ''));
     setPackageSessionId(pkg.academic_session_id ? String(pkg.academic_session_id) : (sessions[0]?.id ? String(sessions[0].id) : ''));
+    setPackageLevelId(pkg.academic_level_id ? String(pkg.academic_level_id) : (levels[0]?.id ? String(levels[0].id) : ''));
     setPackageCourseId(pkg.course_id ? String(pkg.course_id) : (courses[0]?.id ? String(courses[0].id) : ''));
     setPackageResourceId(pkg.resource_id ? String(pkg.resource_id) : (resources[0]?.id ? String(resources[0].id) : ''));
     setAvailableFrom(pkg.available_from ? pkg.available_from.substring(0, 10) : '');
@@ -145,6 +160,21 @@ export function AdminPackagesPage() {
     }
   };
 
+  const handleDeletePackage = async () => {
+    if (!deleteModalPackage) return;
+    setDeleting(true);
+    try {
+      await adminService.deletePackage(deleteModalPackage.id);
+      setSuccessMessage(`Package "${deleteModalPackage.name}" removed or archived successfully.`);
+      setDeleteModalPackage(null);
+      await fetchData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to delete package.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
@@ -156,12 +186,26 @@ export function AdminPackagesPage() {
     }
     const priceMinor = Math.round(priceNaira * 100);
 
+    let subscriberPriceMinor: number | null = null;
+    if (packageSubscriberNairaPrice.trim()) {
+      const subPrice = parseFloat(packageSubscriberNairaPrice);
+      if (isNaN(subPrice) || subPrice < 0) {
+        setFormError('Please enter a valid subscriber discounted price.');
+        return;
+      }
+      subscriberPriceMinor = Math.round(subPrice * 100);
+    }
+
     if (packageType === 'semester' && !packageSemesterId) {
       setFormError('Please select a target semester. If none exist, create one in Academic Directory.');
       return;
     }
     if (packageType === 'session' && !packageSessionId) {
       setFormError('Please select a target academic session.');
+      return;
+    }
+    if (packageType === 'level' && !packageLevelId) {
+      setFormError('Please select a target academic level.');
       return;
     }
     if (packageType === 'course' && !packageCourseId) {
@@ -181,8 +225,10 @@ export function AdminPackagesPage() {
           description: packageDesc.trim() || null,
           package_type: packageType,
           price_minor: priceMinor,
+          subscriber_price_minor: subscriberPriceMinor,
           semester_id: packageType === 'semester' ? Number(packageSemesterId) : null,
           academic_session_id: packageType === 'session' ? Number(packageSessionId) : null,
+          academic_level_id: packageType === 'level' ? Number(packageLevelId) : null,
           course_id: packageType === 'course' ? Number(packageCourseId) : null,
           resource_id: packageType === 'resource' ? Number(packageResourceId) : null,
           is_active: isActive,
@@ -194,9 +240,11 @@ export function AdminPackagesPage() {
           description: packageDesc.trim() || null,
           package_type: packageType,
           price_minor: priceMinor,
+          subscriber_price_minor: subscriberPriceMinor,
           currency: 'NGN',
           semester_id: packageType === 'semester' ? Number(packageSemesterId) : null,
           academic_session_id: packageType === 'session' ? Number(packageSessionId) : null,
+          academic_level_id: packageType === 'level' ? Number(packageLevelId) : null,
           course_id: packageType === 'course' ? Number(packageCourseId) : null,
           resource_id: packageType === 'resource' ? Number(packageResourceId) : null,
           available_from: availableFrom ? new Date(availableFrom).toISOString() : null,
@@ -223,14 +271,17 @@ export function AdminPackagesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-bold text-ink-950 flex items-center gap-2">
-            <CreditCard className="h-6 w-6 text-teal-600" />
+          <div className="flex items-center gap-2 mb-1">
+            <CreditCard className="h-6 w-6 text-teal-700" />
+            <Badge tone="teal">Access & Commerce</Badge>
+          </div>
+          <h1 className="font-display text-2xl font-bold text-ink-950">
             Subscription Packages & Commercial Access
           </h1>
           <p className="mt-1 text-sm text-ink-600">
-            Configure access plans (semester subscriptions, session passes, ₦300 course & resource passes), view metrics and verified payments.
+            Configure access plans (semester subscriptions, session passes, cross-level passes, course & resource passes), view metrics, subscriber discounts, and payments.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -296,7 +347,8 @@ export function AdminPackagesPage() {
                     <th className="px-4 py-3">Package Name</th>
                     <th className="px-4 py-3">Plan Type</th>
                     <th className="px-4 py-3">Target Scope</th>
-                    <th className="px-4 py-3">Price</th>
+                    <th className="px-4 py-3">Regular Price</th>
+                    <th className="px-4 py-3">Subscriber Price</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Subscribers</th>
                     <th className="px-4 py-3">Total Revenue</th>
@@ -317,6 +369,8 @@ export function AdminPackagesPage() {
                           tone={
                             pkg.package_type === 'session'
                               ? 'teal'
+                              : pkg.package_type === 'level'
+                              ? 'teal'
                               : pkg.package_type === 'course'
                               ? 'green'
                               : pkg.package_type === 'resource'
@@ -326,6 +380,8 @@ export function AdminPackagesPage() {
                         >
                           {pkg.package_type === 'session'
                             ? 'Session Pass'
+                            : pkg.package_type === 'level'
+                            ? 'Level Pass'
                             : pkg.package_type === 'course'
                             ? 'Course Pass'
                             : pkg.package_type === 'resource'
@@ -338,6 +394,15 @@ export function AdminPackagesPage() {
                       </td>
                       <td className="px-4 py-3 font-semibold text-ink-900 whitespace-nowrap">
                         ₦{(pkg.price_minor / 100).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {pkg.subscriber_price_minor ? (
+                          <span className="font-semibold text-emerald-700">
+                            ₦{(pkg.subscriber_price_minor / 100).toLocaleString()}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-ink-400">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <Badge tone={pkg.is_active ? 'green' : 'neutral'}>
@@ -366,6 +431,15 @@ export function AdminPackagesPage() {
                           leftIcon={<Edit2 className="h-3.5 w-3.5" />}
                         >
                           Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => setDeleteModalPackage(pkg)}
+                          title="Delete package"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </td>
                     </tr>
@@ -411,7 +485,7 @@ export function AdminPackagesPage() {
                           {p.status}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 text-xs text-ink-500">{formatDate(p.created_at)}</td>
+                      <td className="px-4 py-3 text-xs text-ink-500 whitespace-nowrap">{formatDate(p.created_at)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -468,7 +542,7 @@ export function AdminPackagesPage() {
             />
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-3">
+          <div className="grid sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-ink-600 mb-1">
                 Plan Type
@@ -477,16 +551,17 @@ export function AdminPackagesPage() {
                 value={packageType}
                 onChange={(e) => setPackageType(e.target.value)}
               >
-                <option value="semester">Semester Subscription (Single Semester)</option>
+                <option value="semester">Semester Subscription</option>
                 <option value="session">Session Pass (Both Semesters)</option>
-                <option value="course">Course Pass (Single Course Pass / ₦300 option)</option>
-                <option value="resource">Single Resource Pass (Single Handout / Past Question)</option>
+                <option value="level">Level Pass (Cross-Level / Study Ahead)</option>
+                <option value="course">Course Pass (Single Course Pass)</option>
+                <option value="resource">Single Resource Pass</option>
               </Select>
             </div>
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-ink-600 mb-1">
-                Price in Naira (₦)
+                Regular Price (₦)
               </label>
               <Input
                 required
@@ -496,6 +571,21 @@ export function AdminPackagesPage() {
                 placeholder="1500"
                 value={packageNairaPrice}
                 onChange={(e) => setPackageNairaPrice(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-ink-600 mb-1">
+                Subscriber Price (₦)
+              </label>
+              <Input
+                type="number"
+                min="0"
+                step="50"
+                placeholder="e.g. 1000 or 200"
+                value={packageSubscriberNairaPrice}
+                onChange={(e) => setPackageSubscriberNairaPrice(e.target.value)}
+                title="Discounted price for students with active subscription"
               />
             </div>
           </div>
@@ -539,6 +629,25 @@ export function AdminPackagesPage() {
                 {sessions.map((sess) => (
                   <option key={sess.id} value={sess.id}>
                     Session {sess.name} ({formatDate(sess.starts_on)} to {formatDate(sess.ends_on)})
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
+
+          {packageType === 'level' && (
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-ink-600 mb-1">
+                Target Academic Level (All Level Resources)
+              </label>
+              <Select
+                value={packageLevelId}
+                onChange={(e) => setPackageLevelId(e.target.value)}
+                required
+              >
+                {levels.map((lvl) => (
+                  <option key={lvl.id} value={lvl.id}>
+                    {lvl.name} ({lvl.code})
                   </option>
                 ))}
               </Select>
@@ -606,6 +715,36 @@ export function AdminPackagesPage() {
           </div>
         </form>
       </Dialog>
+
+      {/* DELETE CONFIRMATION DIALOG */}
+      {deleteModalPackage && (
+        <Dialog
+          open
+          onClose={() => setDeleteModalPackage(null)}
+          title="Delete / Deactivate Package"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-ink-700 leading-relaxed">
+              Are you sure you want to delete <strong>{deleteModalPackage.name}</strong>?
+            </p>
+            <p className="text-xs text-ink-500">
+              Note: If this package has past payments or active student entitlements, the system will safely archive and deactivate it so students retain their historical receipts.
+            </p>
+            <div className="flex justify-end gap-2 pt-3 border-t border-ink-100">
+              <Button variant="outline" onClick={() => setDeleteModalPackage(null)}>
+                Cancel
+              </Button>
+              <Button
+                className="bg-red-600 hover:bg-red-700 text-white"
+                loading={deleting}
+                onClick={handleDeletePackage}
+              >
+                Confirm Delete
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 }

@@ -15,8 +15,6 @@ import {
   Check,
   X,
   ShieldCheck,
-  GraduationCap,
-  IdCard,
   Sparkles,
 } from 'lucide-react';
 
@@ -36,13 +34,10 @@ export function RegisterPage() {
   const redirect = params.get('redirect');
 
   const [firstName, setFirstName] = useState('');
-  const [middleName, setMiddleName] = useState('');
   const [surname, setSurname] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [matriculationNumber, setMatriculationNumber] = useState('');
-  const [jambRegistrationNumber, setJambRegistrationNumber] = useState('');
   const [agree, setAgree] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,9 +52,6 @@ export function RegisterPage() {
     if (!firstName.trim() || !surname.trim()) {
       return setError('Please enter your first name and surname.');
     }
-    if (!matriculationNumber.trim() && !jambRegistrationNumber.trim()) {
-      return setError('Enter your Matriculation Number or JAMB Number to continue.');
-    }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       return setError('Please enter a valid email address.');
     }
@@ -70,18 +62,15 @@ export function RegisterPage() {
       return setError('Passwords do not match.');
     }
     if (!agree) {
-      return setError('Please review and accept the terms of service to continue.');
+      return setError('Please review and accept the Terms of Service to continue.');
     }
 
     setLoading(true);
     const result = await register({
       firstName: firstName.trim(),
-      middleName: middleName.trim() || undefined,
       surname: surname.trim(),
       email: email.trim(),
       password,
-      matriculationNumber: matriculationNumber.trim() || undefined,
-      jambRegistrationNumber: jambRegistrationNumber.trim() || undefined,
     });
     setLoading(false);
     if (result.ok) {
@@ -104,13 +93,13 @@ export function RegisterPage() {
         <div className="mb-6">
           <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-teal-50 border border-teal-200/60 text-teal-800 text-xs font-semibold mb-3">
             <Sparkles className="h-3 w-3 text-teal-600" />
-            <span>Free Student Registration</span>
+            <span>Step 1: Student Account Creation</span>
           </div>
           <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-ink-950 tracking-tight">
-            Create student account
+            Create your account
           </h1>
           <p className="mt-2 text-sm sm:text-base leading-relaxed text-ink-600">
-            Browse course catalogues, preview materials, and unlock practice tests tailored to your SAZU level.
+            Sign up to access course handouts, past exams, and interactive assessments tailored to your SAZU faculty.
           </p>
         </div>
 
@@ -120,100 +109,48 @@ export function RegisterPage() {
           </Alert>
         )}
 
-        <form onSubmit={submit} className="space-y-7" noValidate>
+        <form onSubmit={submit} className="space-y-4 sm:space-y-5">
           {/* Section 1: Personal Details */}
           <div className="p-4 sm:p-5 rounded-2xl bg-ink-50/70 border border-ink-100">
             <h2 className="text-xs font-bold uppercase tracking-wider text-teal-800 mb-3.5 flex items-center gap-2">
               <User className="h-4 w-4 text-teal-600" />
-              <span>1. Personal Information</span>
+              <span>Full Name</span>
             </h2>
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-ink-800 mb-1.5">
-                    First Name <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    autoComplete="given-name"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    placeholder="e.g. Aisha"
-                    className="text-base sm:text-sm"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-ink-800 mb-1.5">
-                    Surname <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    autoComplete="family-name"
-                    value={surname}
-                    onChange={(e) => setSurname(e.target.value)}
-                    placeholder="e.g. Musa"
-                    className="text-base sm:text-sm"
-                    required
-                  />
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-ink-800 mb-1.5">
+                  First Name <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  autoComplete="given-name"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="e.g. Fatima"
+                  className="text-base sm:text-sm"
+                  required
+                />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-ink-800 mb-1.5">
-                  Middle Name <span className="text-ink-400 font-normal">(Optional)</span>
+                  Surname <span className="text-red-500">*</span>
                 </label>
                 <Input
-                  autoComplete="additional-name"
-                  value={middleName}
-                  onChange={(e) => setMiddleName(e.target.value)}
-                  placeholder="e.g. Danladi"
+                  autoComplete="family-name"
+                  value={surname}
+                  onChange={(e) => setSurname(e.target.value)}
+                  placeholder="e.g. Ibrahim"
                   className="text-base sm:text-sm"
+                  required
                 />
               </div>
             </div>
           </div>
 
-          {/* Section 2: University Academic Details */}
-          <div className="p-4 sm:p-5 rounded-2xl bg-ink-50/70 border border-ink-100">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-teal-800 mb-3.5 flex items-center gap-2">
-              <GraduationCap className="h-4 w-4 text-teal-600" />
-              <span>2. SAZU Student Identification</span>
-            </h2>
-            <p className="text-xs text-ink-600 mb-3.5 leading-relaxed">
-              Provide at least one identifier so your courses, level, and resources link accurately.
-            </p>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-ink-800 mb-1.5">
-                  Matriculation Number <span className="text-ink-500 font-normal">(Preferred)</span>
-                </label>
-                <Input
-                  autoComplete="off"
-                  value={matriculationNumber}
-                  onChange={(e) => setMatriculationNumber(e.target.value)}
-                  placeholder="e.g. CSCU/23/7877"
-                  leftIcon={<IdCard className="h-4 w-4 text-ink-400" />}
-                  className="text-base sm:text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-ink-800 mb-1.5">
-                  JAMB Registration Number <span className="text-ink-500 font-normal">(If matric number not issued)</span>
-                </label>
-                <Input
-                  autoComplete="off"
-                  value={jambRegistrationNumber}
-                  onChange={(e) => setJambRegistrationNumber(e.target.value)}
-                  placeholder="e.g. 202410294821AB"
-                  className="text-base sm:text-sm"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Section 3: Account & Security */}
+          {/* Section 2: Account Credentials */}
           <div className="p-4 sm:p-5 rounded-2xl bg-ink-50/70 border border-ink-100">
             <h2 className="text-xs font-bold uppercase tracking-wider text-teal-800 mb-3.5 flex items-center gap-2">
               <Lock className="h-4 w-4 text-teal-600" />
-              <span>3. Account Security</span>
+              <span>Login Credentials</span>
             </h2>
             <div className="space-y-4">
               <div>
@@ -225,7 +162,7 @@ export function RegisterPage() {
                   autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="e.g. student@gmail.com"
+                  placeholder="e.g. yourname@gmail.com"
                   leftIcon={<Mail className="h-4 w-4 text-ink-400" />}
                   className="text-base sm:text-sm"
                   required
@@ -241,7 +178,7 @@ export function RegisterPage() {
                   autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Create a strong password"
+                  placeholder="At least 12 characters"
                   leftIcon={<Lock className="h-4 w-4 text-ink-400" />}
                   className="text-base sm:text-sm"
                   rightSlot={
@@ -312,11 +249,7 @@ export function RegisterPage() {
                 <Link to="/terms" className="font-semibold text-teal-700 hover:underline">
                   Terms of Service
                 </Link>{' '}
-                and acknowledge the{' '}
-                <Link to="/privacy" className="font-semibold text-teal-700 hover:underline">
-                  Privacy Policy
-                </Link>
-                .
+                and accept the account creation conditions of SAZU Study Hub.
               </span>
             </label>
           </div>
@@ -328,7 +261,7 @@ export function RegisterPage() {
             loading={loading}
             className="h-12 text-base font-semibold shadow-md active:scale-[0.99] transition-transform"
           >
-            Complete Student Registration
+            Create Account & Continue
           </Button>
         </form>
 
@@ -347,7 +280,7 @@ export function RegisterPage() {
         <div className="mt-4 text-center">
           <span className="inline-flex items-center gap-1.5 text-xs text-ink-500">
             <ShieldCheck className="h-3.5 w-3.5 text-teal-600" />
-            <span>Protected by official academic verification policies.</span>
+            <span>Next steps: Email confirmation & student status verification.</span>
           </span>
         </div>
       </div>
