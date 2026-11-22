@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_admin
+from app.api.dependencies import get_current_admin, require_capability
 from app.db.database import get_db
 from app.models.academic import (
     AcademicLevel,
@@ -22,12 +22,17 @@ from app.models.academic import (
     Programme,
     Semester,
 )
+from app.models.audit import AuditEvent
 from app.models.user import User
 from app.models.resource import Resource
 from app.models.identity import VerificationSubmission
 from app.models.commerce import AccessPackage, Payment
+from app.models.subscription import Subscription
 from sqlalchemy import func
 from app.schemas.academic import (
+    AcademicSessionCreate,
+    AcademicSessionResponse,
+    AcademicSessionUpdate,
     CourseCreate,
     CourseOfferingImportResponse,
     CourseOfferingResponse,
@@ -46,10 +51,17 @@ from app.schemas.academic import (
     ProgrammeCreate,
     ProgrammeResponse,
     ProgrammeUpdate,
+    SemesterCreate,
+    SemesterResponse,
+    SemesterUpdate,
 )
 
 
-router = APIRouter(prefix="/admin/academic", tags=["academic directory administration"])
+router = APIRouter(
+    prefix="/admin/academic",
+    tags=["academic directory administration"],
+    dependencies=[Depends(require_capability("manage_academic_catalogue"))],
+)
 MAX_CSV_BYTES = 2 * 1024 * 1024
 MAX_CSV_ROWS = 2_000
 CSV_COLUMNS = {
@@ -740,3 +752,305 @@ def admin_overview(
             for s in recent_submissions
         ],
     }
+
+
+# =========================================================================
+# Academic Sessions & Semesters Administration
+# =========================================================================
+
+@router.get("/sessions", response_model=list[AcademicSessionResponse])
+def admin_list_sessions(
+    _admin: User = Depends(require_capability("manage_academic_catalogue")),
+    db: Session = Depends(get_db),
+) -> list[AcademicSessionResponse]:
+    sessions = db.scalars(select(AcademicSession).order_by(AcademicSession.starts_on.desc())).all()
+    res = []
+    for s in sessions:
+        semesters = db.scalars(
+            select(Semester).where(Semester.academic_session_id == s.id).order_by(Semester.number)
+        ).all()
+        res.append(
+            AcademicSessionResponse(
+                id=s.id,
+                name=s.name,
+                starts_on=s.starts_on,
+                ends_on=s.ends_on,
+                is_active=s.is_active,
+                semesters=[SemesterResponse.model_validate(sem) for sem in semesters],
+            )
+        )
+    return res
+
+
+@router.post("/sessions", response_model=AcademicSessionResponse, status_code=status.HTTP_201_CREATED)
+def admin_create_session(
+    data: AcademicSessionCreate,
+    admin: User = Depends(require_capability("manage_academic_catalogue")),
+    db: Session = Depends(get_db),
+) -> AcademicSessionResponse:
+    existing = db.scalar(select(AcademicSession.id).where(AcademicSession.name == data.name.strip()))
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An academic session with this name already exists.",
+        )
+    session = AcademicSession(
+        name=data.name.strip(),
+        starts_on=data.starts_on,
+        ends_on=data.ends_on,
+        is_active=data.is_active,
+    )
+    db.add(session)
+    db.flush()
+    db.add(
+        AuditEvent(
+            actor_user_id=admin.id,
+            action="admin.academic_session_created",
+            target_type="academic_session",
+            target_id=str(session.id),
+            event_metadata={"name": session.name, "is_active": session.is_active},
+        )
+    )
+    db.commit()
+    db.refresh(session)
+    return AcademicSessionResponse(
+        id=session.id,
+        name=session.name,
+        starts_on=session.starts_on,
+        ends_on=session.ends_on,
+        is_active=session.is_active,
+        semesters=[],
+    )
+
+
+@router.patch("/sessions/{session_id}", response_model=AcademicSessionResponse)
+def admin_update_session(
+    session_id: int,
+    data: AcademicSessionUpdate,
+    admin: User = Depends(require_capability("manage_academic_catalogue")),
+    db: Session = Depends(get_db),
+) -> AcademicSessionResponse:
+    session = db.get(AcademicSession, session_id)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Academic session not found.")
+    if data.name is not None:
+        name = data.name.strip()
+        existing = db.scalar(
+            select(AcademicSession.id).where(AcademicSession.name == name, AcademicSession.id != session_id)
+        )
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An academic session with this name already exists.",
+            )
+        session.name = name
+    if data.starts_on is not None:
+        session.starts_on = data.starts_on
+    if data.ends_on is not None:
+        session.ends_on = data.ends_on
+    if session.ends_on <= session.starts_on:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="ends_on must be later than starts_on.")
+    if data.is_active is not None:
+        session.is_active = data.is_active
+
+    db.add(
+        AuditEvent(
+            actor_user_id=admin.id,
+            action="admin.academic_session_updated",
+            target_type="academic_session",
+            target_id=str(session.id),
+        )
+    )
+    db.commit()
+    db.refresh(session)
+    semesters = db.scalars(
+        select(Semester).where(Semester.academic_session_id == session.id).order_by(Semester.number)
+    ).all()
+    return AcademicSessionResponse(
+        id=session.id,
+        name=session.name,
+        starts_on=session.starts_on,
+        ends_on=session.ends_on,
+        is_active=session.is_active,
+        semesters=[SemesterResponse.model_validate(sem) for sem in semesters],
+    )
+
+
+@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+def admin_delete_session(
+    session_id: int,
+    admin: User = Depends(require_capability("manage_academic_catalogue")),
+    db: Session = Depends(get_db),
+) -> None:
+    session = db.get(AcademicSession, session_id)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Academic session not found.")
+    has_semesters = db.scalar(select(Semester.id).where(Semester.academic_session_id == session_id).limit(1))
+    if has_semesters:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete an academic session that contains configured semesters. Delete semesters first.",
+        )
+    has_packages = db.scalar(select(AccessPackage.id).where(AccessPackage.academic_session_id == session_id).limit(1))
+    if has_packages:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete an academic session that is referenced by subscription packages.",
+        )
+    db.delete(session)
+    db.add(
+        AuditEvent(
+            actor_user_id=admin.id,
+            action="admin.academic_session_deleted",
+            target_type="academic_session",
+            target_id=str(session_id),
+        )
+    )
+    db.commit()
+
+
+@router.get("/semesters", response_model=list[SemesterResponse])
+def admin_list_semesters(
+    session_id: int | None = None,
+    _admin: User = Depends(require_capability("manage_academic_catalogue")),
+    db: Session = Depends(get_db),
+) -> list[SemesterResponse]:
+    query = select(Semester).order_by(Semester.starts_on.desc())
+    if session_id:
+        query = query.where(Semester.academic_session_id == session_id)
+    semesters = db.scalars(query).all()
+    return [SemesterResponse.model_validate(sem) for sem in semesters]
+
+
+@router.post("/semesters", response_model=SemesterResponse, status_code=status.HTTP_201_CREATED)
+def admin_create_semester(
+    data: SemesterCreate,
+    admin: User = Depends(require_capability("manage_academic_catalogue")),
+    db: Session = Depends(get_db),
+) -> SemesterResponse:
+    session = db.get(AcademicSession, data.academic_session_id)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Academic session not found.")
+    existing = db.scalar(
+        select(Semester.id).where(
+            Semester.academic_session_id == data.academic_session_id,
+            Semester.number == data.number,
+        )
+    )
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Semester {data.number} is already configured for this academic session.",
+        )
+    semester = Semester(
+        academic_session_id=data.academic_session_id,
+        number=data.number,
+        starts_on=data.starts_on,
+        ends_on=data.ends_on,
+    )
+    db.add(semester)
+    db.flush()
+    db.add(
+        AuditEvent(
+            actor_user_id=admin.id,
+            action="admin.semester_created",
+            target_type="semester",
+            target_id=str(semester.id),
+            event_metadata={
+                "session_id": data.academic_session_id,
+                "number": data.number,
+            },
+        )
+    )
+    db.commit()
+    db.refresh(semester)
+    return SemesterResponse.model_validate(semester)
+
+
+@router.patch("/semesters/{semester_id}", response_model=SemesterResponse)
+def admin_update_semester(
+    semester_id: int,
+    data: SemesterUpdate,
+    admin: User = Depends(require_capability("manage_academic_catalogue")),
+    db: Session = Depends(get_db),
+) -> SemesterResponse:
+    semester = db.get(Semester, semester_id)
+    if not semester:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Semester not found.")
+    if data.academic_session_id is not None:
+        session = db.get(AcademicSession, data.academic_session_id)
+        if not session:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Academic session not found.")
+        semester.academic_session_id = data.academic_session_id
+    if data.number is not None:
+        existing = db.scalar(
+            select(Semester.id).where(
+                Semester.academic_session_id == semester.academic_session_id,
+                Semester.number == data.number,
+                Semester.id != semester_id,
+            )
+        )
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Semester {data.number} is already configured for this academic session.",
+            )
+        semester.number = data.number
+    if data.starts_on is not None:
+        semester.starts_on = data.starts_on
+    if data.ends_on is not None:
+        semester.ends_on = data.ends_on
+    if semester.ends_on <= semester.starts_on:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="ends_on must be later than starts_on.")
+
+    db.add(
+        AuditEvent(
+            actor_user_id=admin.id,
+            action="admin.semester_updated",
+            target_type="semester",
+            target_id=str(semester.id),
+        )
+    )
+    db.commit()
+    db.refresh(semester)
+    return SemesterResponse.model_validate(semester)
+
+
+@router.delete("/semesters/{semester_id}", status_code=status.HTTP_204_NO_CONTENT)
+def admin_delete_semester(
+    semester_id: int,
+    admin: User = Depends(require_capability("manage_academic_catalogue")),
+    db: Session = Depends(get_db),
+) -> None:
+    semester = db.get(Semester, semester_id)
+    if not semester:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Semester not found.")
+    has_offerings = db.scalar(select(CourseOffering.id).where(CourseOffering.semester_id == semester_id).limit(1))
+    if has_offerings:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete a semester that has course offerings assigned to it.",
+        )
+    has_packages = db.scalar(select(AccessPackage.id).where(AccessPackage.semester_id == semester_id).limit(1))
+    if has_packages:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete a semester that is referenced by access packages.",
+        )
+    has_subs = db.scalar(select(Subscription.id).where(Subscription.semester_id == semester_id).limit(1))
+    if has_subs:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete a semester that has student subscriptions.",
+        )
+    db.delete(semester)
+    db.add(
+        AuditEvent(
+            actor_user_id=admin.id,
+            action="admin.semester_deleted",
+            target_type="semester",
+            target_id=str(semester_id),
+        )
+    )
+    db.commit()
+

@@ -4,10 +4,24 @@ export interface SubscriptionPackage {
   id: number;
   name: string;
   description: string | null;
-  package_type?: string;
+  package_type: 'subscription' | 'semester' | 'session' | 'level' | 'course' | 'resource' | 'resource_package';
   price_minor: number;
+  subscriber_price_minor?: number | null;
+  effective_price_minor?: number | null;
   currency: string;
-  duration_days: number;
+  semester_id?: number | null;
+  academic_session_id?: number | null;
+  academic_level_id?: number | null;
+  course_id?: number | null;
+  resource_id?: number | null;
+  target_name?: string | null;
+  semester_starts_on?: string | null;
+  semester_ends_on?: string | null;
+  available_from?: string | null;
+  available_until?: string | null;
+  is_active: boolean;
+  buyers_count?: number;
+  total_revenue_minor?: number;
 }
 
 export interface PaymentRecord {
@@ -30,26 +44,25 @@ export interface PaymentVerification {
 
 export const paymentService = {
   async listPackages(): Promise<SubscriptionPackage[]> {
-    const response = await apiRequest<{ items: SubscriptionPackage[]; total: number }>('/subscriptions/plans', {}, null);
-    return response.items;
+    const res = await apiRequest<SubscriptionPackage[] | { items: SubscriptionPackage[] }>('/subscriptions/packages');
+    return Array.isArray(res) ? res : (res.items || []);
   },
 
   async initializePayment(packageId: number): Promise<{ checkout_url: string; reference: string }> {
-    return apiRequest('/payments/initiate', {
+    return apiRequest<{ checkout_url: string; reference: string }>('/payments/initialize', {
       method: 'POST',
       body: JSON.stringify({ package_id: packageId }),
     });
   },
 
   async getPaymentHistory(): Promise<PaymentRecord[]> {
-    const response = await apiRequest<{ items: PaymentRecord[]; total: number }>('/payments/history');
-    return response.items;
+    const response = await apiRequest<PaymentRecord[] | { items: PaymentRecord[]; total: number }>('/payments');
+    return Array.isArray(response) ? response : (response.items || []);
   },
 
   async verifyPayment(reference: string): Promise<PaymentVerification> {
-    return apiRequest('/payments/verify', {
+    return apiRequest(`/payments/${encodeURIComponent(reference)}/verify`, {
       method: 'POST',
-      body: JSON.stringify({ reference }),
     });
   },
 };

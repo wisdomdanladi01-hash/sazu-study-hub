@@ -47,8 +47,6 @@ class StudentRegistration(BaseModel):
             self.jamb_registration_number
         )
         self.matriculation_number = self._normalize_identifier(self.matriculation_number)
-        if not self.jamb_registration_number and not self.matriculation_number:
-            raise ValueError("Provide a JAMB registration number or matriculation number.")
         return self
 
     @staticmethod
@@ -75,7 +73,58 @@ class UserResponse(BaseModel):
     full_name: str
     is_active: bool
     is_admin: bool = False
+    is_superuser: bool = False
     role: str | None = None
+    email_verified: bool = False
+    permissions: list[str] = []
+
+
+class EmailVerificationSendResponse(BaseModel):
+    message: str
+    email: str
+    expires_in_minutes: int
+    dev_code: str | None = None
+
+
+class EmailVerificationCodeRequest(BaseModel):
+    code: str = Field(min_length=4, max_length=10)
+
+
+class RoleResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    description: str | None
+
+
+class AdminUserCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: EmailStr
+    full_name: str = Field(min_length=2, max_length=255)
+    password: str = Field(min_length=12, max_length=256)
+    role_name: str = "content_admin"
+    is_superuser: bool = False
+
+
+class AdminRoleUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role_name: str | None = None
+    is_superuser: bool | None = None
+    is_active: bool | None = None
+
+
+class AdminUserResponse(BaseModel):
+    id: int
+    email: str
+    full_name: str
+    is_active: bool
+    is_superuser: bool
+    role: str | None
+    permissions: list[str] = []
+    created_at: str
 
 
 class UserProfileUpdate(BaseModel):

@@ -12,14 +12,12 @@ import {
   CreditCard,
   Tag,
   ArrowRight,
-  Lock,
   Sparkles,
-  Layers,
   FileText,
-  BookOpen,
   Calendar,
   GraduationCap,
-  HelpCircle,
+  BookOpen,
+  Layers,
 } from 'lucide-react';
 
 export function PricingPage() {
@@ -74,16 +72,21 @@ export function PricingPage() {
     }
   };
 
-  // Identify specific packages from backend
-  const semesterPkg = packages.find((p) => p.name.toLowerCase().includes('semester') && !p.name.toLowerCase().includes('lower'));
-  const sessionPkg = packages.find((p) => p.name.toLowerCase().includes('session'));
-  const lowerSubscribedPkg = packages.find(
-    (p) => p.name.toLowerCase().includes('lower') && p.name.toLowerCase().includes('sub')
+  // Group packages dynamically
+  const semesterPackages = packages.filter(
+    (p) => p.package_type === 'semester' || p.package_type === 'subscription'
   );
-  const lowerStandalonePkg = packages.find(
-    (p) => p.name.toLowerCase().includes('lower') && p.name.toLowerCase().includes('standalone')
+  const sessionPackages = packages.filter((p) => p.package_type === 'session');
+  const levelPackages = packages.filter((p) => p.package_type === 'level');
+  const coursePackages = packages.filter((p) => p.package_type === 'course');
+  const resourcePackages = packages.filter(
+    (p) => p.package_type === 'resource' || p.package_type === 'resource_package'
   );
-  const singleMaterialPkg = packages.find((p) => p.name.toLowerCase().includes('single'));
+
+  const primarySemesterPkg = semesterPackages[0] ?? null;
+  const primarySessionPkg = sessionPackages[0] ?? null;
+  const primaryCoursePkg = coursePackages[0] ?? null;
+  const primaryResourcePkg = resourcePackages[0] ?? null;
 
   return (
     <div className="container-page py-8 sm:py-14">
@@ -96,7 +99,7 @@ export function PricingPage() {
           Transparent, Affordable Access for Every SAZU Student
         </h1>
         <p className="mt-3.5 text-base sm:text-lg text-ink-600 leading-relaxed text-balance">
-          Choose a full academic pass, unlock lower-level carryover materials, or pay as little as ₦300 per single handout or past question.
+          Choose a full academic pass, unlock semester course materials, or pay per single handout or past question.
         </p>
 
         {profile && (
@@ -137,30 +140,37 @@ export function PricingPage() {
                 <span>Standard Level Access Packages</span>
               </h2>
               <p className="text-xs sm:text-sm text-ink-600 mt-1">
-                Access test practice, exam questions, and lecture handouts tailored to your registered level.
+                Access test practice, exam questions, and lecture handouts tailored to your academic curriculum.
               </p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-              {/* Semester Pass: 1,500 */}
+              {/* Semester Pass */}
               <Card className="flex flex-col justify-between overflow-hidden border-ink-200/80 hover:border-teal-300 transition-all shadow-card hover:shadow-pop">
                 <div className="p-6 sm:p-8">
                   <div className="flex items-start justify-between gap-3 mb-4">
                     <div>
                       <Badge tone="neutral" className="mb-2">Semester Term</Badge>
                       <h3 className="font-display text-2xl font-bold text-ink-950">
-                        {semesterPkg ? semesterPkg.name : 'Per Semester Package'}
+                        {primarySemesterPkg ? primarySemesterPkg.name : 'Semester Subscription'}
                       </h3>
+                      {primarySemesterPkg?.target_name && (
+                        <p className="text-xs text-ink-500 font-medium mt-1">
+                          {primarySemesterPkg.target_name}
+                        </p>
+                      )}
                     </div>
                   </div>
 
                   <div className="flex items-baseline gap-1 my-4">
-                    <span className="font-display text-4xl sm:text-5xl font-extrabold text-ink-950">₦1,500</span>
+                    <span className="font-display text-4xl sm:text-5xl font-extrabold text-ink-950">
+                      {primarySemesterPkg ? `₦${(primarySemesterPkg.price_minor / 100).toLocaleString()}` : '—'}
+                    </span>
                     <span className="text-sm font-semibold text-ink-500">/ semester</span>
                   </div>
 
                   <p className="text-xs sm:text-sm text-ink-700 leading-relaxed mb-6">
-                    Full access for the current semester to test practice, exam practice questions, and all handouts for your level courses.
+                    Full access for the current semester to test practice, exam practice questions, and all lecture handouts.
                   </p>
 
                   <ul className="space-y-3 text-xs sm:text-sm text-ink-800">
@@ -170,7 +180,7 @@ export function PricingPage() {
                     </li>
                     <li className="flex items-start gap-2.5">
                       <Check className="h-4 w-4 text-teal-600 mt-0.5 shrink-0" />
-                      <span>Past & current lecture handouts for all courses at your level</span>
+                      <span>Past & current lecture handouts for registered semester courses</span>
                     </li>
                     <li className="flex items-start gap-2.5">
                       <Check className="h-4 w-4 text-teal-600 mt-0.5 shrink-0" />
@@ -180,26 +190,26 @@ export function PricingPage() {
                 </div>
 
                 <div className="p-6 bg-ink-50/70 border-t border-ink-100">
-                  {semesterPkg ? (
+                  {primarySemesterPkg ? (
                     <Button
                       size="lg"
                       fullWidth
-                      onClick={() => void startCheckout(semesterPkg)}
-                      loading={processingId === semesterPkg.id}
+                      onClick={() => void startCheckout(primarySemesterPkg)}
+                      loading={processingId === primarySemesterPkg.id}
                       leftIcon={<CreditCard className="h-5 w-5" />}
                     >
-                      Subscribe for Semester (₦1,500)
+                      Subscribe for Semester (₦{(primarySemesterPkg.price_minor / 100).toLocaleString()})
                     </Button>
                   ) : (
-                    <Button size="lg" fullWidth disabled>Temporarily unavailable</Button>
+                    <Button size="lg" fullWidth disabled>No semester plan published yet</Button>
                   )}
                 </div>
               </Card>
 
-              {/* Full Session Pass: 2,000 - BEST VALUE */}
+              {/* Full Session Pass - BEST VALUE */}
               <Card className="relative flex flex-col justify-between overflow-hidden border-2 border-teal-600 shadow-pop">
                 <div className="absolute top-0 right-0 bg-teal-600 text-white text-xs font-bold px-3 py-1 rounded-bl-xl uppercase tracking-wider flex items-center gap-1">
-                  <Sparkles className="h-3 w-3" /> Best Value • Save ₦1,000
+                  <Sparkles className="h-3 w-3" /> Best Value Pass
                 </div>
 
                 <div className="p-6 sm:p-8">
@@ -207,160 +217,280 @@ export function PricingPage() {
                     <div>
                       <Badge tone="teal" className="mb-2">Entire Academic Year</Badge>
                       <h3 className="font-display text-2xl font-bold text-ink-950">
-                        {sessionPkg ? sessionPkg.name : 'Per Session Package'}
+                        {primarySessionPkg ? primarySessionPkg.name : 'Full Academic Session Pass'}
                       </h3>
+                      {primarySessionPkg?.target_name && (
+                        <p className="text-xs text-ink-500 font-medium mt-1">
+                          {primarySessionPkg.target_name}
+                        </p>
+                      )}
                     </div>
                   </div>
 
                   <div className="flex items-baseline gap-1 my-4">
-                    <span className="font-display text-4xl sm:text-5xl font-extrabold text-ink-950">₦2,000</span>
+                    <span className="font-display text-4xl sm:text-5xl font-extrabold text-ink-950">
+                      {primarySessionPkg ? `₦${(primarySessionPkg.price_minor / 100).toLocaleString()}` : '—'}
+                    </span>
                     <span className="text-sm font-semibold text-ink-500">/ full session</span>
                   </div>
 
                   <p className="text-xs sm:text-sm text-ink-700 leading-relaxed mb-6">
-                    Covers your whole academic session (First & Second Semesters) including all available handouts, past questions for tests and exams.
+                    Covers both First and Second Semesters of the academic session, including handouts, past questions, and practice exams.
                   </p>
 
                   <ul className="space-y-3 text-xs sm:text-sm text-ink-800">
                     <li className="flex items-start gap-2.5">
                       <Check className="h-4 w-4 text-teal-600 mt-0.5 shrink-0" />
-                      <span><strong>Both Semesters Included</strong> for your academic year</span>
+                      <span><strong>Both Semesters Included</strong> (First & Second Semesters)</span>
                     </li>
                     <li className="flex items-start gap-2.5">
                       <Check className="h-4 w-4 text-teal-600 mt-0.5 shrink-0" />
-                      <span>Past questions for tests & exams across all registered level courses</span>
+                      <span>Past questions for tests & exams across registered level courses</span>
                     </li>
                     <li className="flex items-start gap-2.5">
                       <Check className="h-4 w-4 text-teal-600 mt-0.5 shrink-0" />
-                      <span>All lecture notes and supplementary study materials</span>
+                      <span>All lecture notes, handouts, and supplementary materials</span>
                     </li>
                     <li className="flex items-start gap-2.5">
                       <Check className="h-4 w-4 text-teal-600 mt-0.5 shrink-0" />
-                      <span>Priority access to new practice tests uploaded during the session</span>
+                      <span>Continuous access throughout the academic session</span>
                     </li>
                   </ul>
                 </div>
 
                 <div className="p-6 bg-teal-50/50 border-t border-teal-100">
-                  {sessionPkg ? (
+                  {primarySessionPkg ? (
                     <Button
                       size="lg"
                       fullWidth
-                      onClick={() => void startCheckout(sessionPkg)}
-                      loading={processingId === sessionPkg.id}
+                      onClick={() => void startCheckout(primarySessionPkg)}
+                      loading={processingId === primarySessionPkg.id}
                       leftIcon={<CreditCard className="h-5 w-5" />}
                     >
-                      Get Full Session Pass (₦2,000)
+                      Get Session Pass (₦{(primarySessionPkg.price_minor / 100).toLocaleString()})
                     </Button>
                   ) : (
-                    <Button size="lg" fullWidth disabled>Temporarily unavailable</Button>
+                    <Button size="lg" fullWidth disabled>No session plan published yet</Button>
                   )}
                 </div>
               </Card>
             </div>
           </div>
 
-          {/* CROSS-LEVEL (LOWER LEVEL) ACCESS */}
-          <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-ink-900 to-ink-950 text-white relative overflow-hidden">
-            <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-teal-500/15 blur-3xl pointer-events-none" />
-
-            <div className="max-w-2xl mb-6">
-              <Badge tone="teal" className="mb-2.5 bg-teal-400/20 text-teal-200 border-teal-400/30">
-                Carryover & Prerequisite Study
-              </Badge>
-              <h2 className="font-display text-2xl sm:text-3xl font-extrabold text-white">
-                Access Resources for Lower Levels
+          {/* LEVEL / STUDY-AHEAD PASSES */}
+          <div>
+            <div className="text-center sm:text-left mb-6">
+              <h2 className="text-lg font-bold text-ink-900 flex items-center justify-center sm:justify-start gap-2">
+                <Layers className="h-5 w-5 text-teal-600" />
+                <span>Level & Study-Ahead Access Passes</span>
               </h2>
-              <p className="mt-2 text-xs sm:text-sm text-ink-200 leading-relaxed">
-                Need to prepare for carryover exams or revise foundational prerequisites from earlier years? You can unlock all resources for all levels lower than yours.
+              <p className="text-xs sm:text-sm text-ink-600 mt-1">
+                Access all resources, handouts, past questions, and assessments for any academic level outside your primary semester. Ideal for studying ahead during breaks or revising previous coursework. Active subscribers receive discounted add-on rates.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mt-6">
-              {/* Option A: 1,000 for active subscribers */}
-              <div className="rounded-2xl bg-white/10 border border-white/15 p-5 sm:p-6 flex flex-col justify-between backdrop-blur">
-                <div>
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-teal-300">Subscriber Add-On</span>
-                    <span className="text-xl font-bold font-display text-white">₦1,000</span>
-                  </div>
-                  <h3 className="font-display text-base font-bold text-white mb-2">
-                    For Current Level Subscribers
-                  </h3>
-                  <p className="text-xs text-ink-200 leading-relaxed mb-4">
-                    If you have already paid for your current level semester package, unlock all lower level materials for just ₦1,000.
-                  </p>
-                </div>
-                {lowerSubscribedPkg && (
-                  <Button
-                    size="sm"
-                    fullWidth
-                    onClick={() => void startCheckout(lowerSubscribedPkg)}
-                    loading={processingId === lowerSubscribedPkg.id}
-                    className="bg-teal-400 text-ink-950 hover:bg-teal-300 font-semibold text-xs"
-                  >
-                    Unlock Lower Levels (₦1,000)
-                  </Button>
-                )}
-              </div>
+            {levelPackages.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {levelPackages.map((pkg) => {
+                  const isDiscounted =
+                    pkg.effective_price_minor != null &&
+                    pkg.effective_price_minor < pkg.price_minor;
+                  const currentPrice = pkg.effective_price_minor ?? pkg.price_minor;
 
-              {/* Option B: 2,000 standalone */}
-              <div className="rounded-2xl bg-white/10 border border-white/15 p-5 sm:p-6 flex flex-col justify-between backdrop-blur">
-                <div>
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-ink-300">Standalone Pass</span>
-                    <span className="text-xl font-bold font-display text-white">₦2,000</span>
-                  </div>
-                  <h3 className="font-display text-base font-bold text-white mb-2">
-                    Without Level Subscription
-                  </h3>
-                  <p className="text-xs text-ink-200 leading-relaxed mb-4">
-                    Direct access to all lower-level past questions, handouts, and practice assessments if you have not subscribed to your main semester.
-                  </p>
-                </div>
-                {lowerStandalonePkg && (
-                  <Button
-                    size="sm"
-                    fullWidth
-                    variant="secondary"
-                    onClick={() => void startCheckout(lowerStandalonePkg)}
-                    loading={processingId === lowerStandalonePkg.id}
-                    className="bg-white/15 border-white/20 text-white hover:bg-white/25 font-semibold text-xs"
-                  >
-                    Get Standalone Access (₦2,000)
-                  </Button>
-                )}
+                  return (
+                    <Card
+                      key={pkg.id}
+                      className="flex flex-col justify-between p-6 border-ink-200 bg-white hover:border-teal-400 transition-all shadow-xs"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <Badge tone="teal">Level Pass</Badge>
+                          {pkg.target_name && (
+                            <span className="text-xs font-mono font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
+                              {pkg.target_name}
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="font-display text-lg font-bold text-ink-950">{pkg.name}</h3>
+
+                        <div className="my-3">
+                          <div className="flex items-baseline gap-2">
+                            <span className="font-display text-3xl font-extrabold text-ink-950">
+                              ₦{(currentPrice / 100).toLocaleString()}
+                            </span>
+                            {isDiscounted && (
+                              <span className="text-sm line-through text-ink-400 font-medium">
+                                ₦{(pkg.price_minor / 100).toLocaleString()}
+                              </span>
+                            )}
+                            <span className="text-xs font-semibold text-ink-500">/ level</span>
+                          </div>
+                          {isDiscounted ? (
+                            <Badge tone="green" className="mt-1 text-xs">
+                              Subscriber Discount Applied (Save ₦{((pkg.price_minor - currentPrice) / 100).toLocaleString()})
+                            </Badge>
+                          ) : pkg.subscriber_price_minor ? (
+                            <p className="mt-1 text-xs text-teal-700 font-medium">
+                              ₦{(pkg.subscriber_price_minor / 100).toLocaleString()} for active subscribers
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <p className="text-xs text-ink-600 leading-relaxed mb-4">
+                          {pkg.description ||
+                            'Full access to all course handouts, past test papers, exam questions, and quizzes for this academic level.'}
+                        </p>
+                        <ul className="space-y-1.5 text-xs text-ink-700">
+                          <li className="flex items-start gap-2">
+                            <Check className="h-3.5 w-3.5 text-teal-600 mt-0.5 shrink-0" />
+                            <span>All level course materials & past questions</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <Check className="h-3.5 w-3.5 text-teal-600 mt-0.5 shrink-0" />
+                            <span>Study ahead or revise previous courses</span>
+                          </li>
+                        </ul>
+                      </div>
+
+                      <div className="mt-5 pt-4 border-t border-ink-100">
+                        <Button
+                          size="md"
+                          fullWidth
+                          onClick={() => void startCheckout(pkg)}
+                          loading={processingId === pkg.id}
+                        >
+                          Get Level Pass (₦{(currentPrice / 100).toLocaleString()})
+                        </Button>
+                      </div>
+                    </Card>
+                  );
+                })}
               </div>
-            </div>
+            ) : (
+              <Card className="p-6 bg-teal-50/40 border-teal-200">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div>
+                    <h3 className="font-semibold text-ink-950 text-sm">Need Access to Another Level?</h3>
+                    <p className="text-xs text-ink-600 mt-1">
+                      Cross-level and study-ahead passes allow you to access complete materials for 100L, 200L, 300L, 400L, or 500L. Standard rate: ₦2,000 / level; active subscribers pay only ₦1,000.
+                    </p>
+                  </div>
+                  <Link to="/courses">
+                    <Button size="sm" variant="outline">
+                      Explore Level Courses
+                    </Button>
+                  </Link>
+                </div>
+              </Card>
+            )}
           </div>
 
-          {/* PER-COURSE / PER-RESOURCE MICRO-ACCESS: 300 NAIRA */}
-          <Card className="p-6 sm:p-8 border-teal-200 bg-gradient-to-r from-teal-50/60 via-white to-blue-50/40">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-              <div className="max-w-xl">
+          {/* COURSE PASS & PER-RESOURCE MICRO-ACCESS */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Single Course Pass */}
+            <Card className="p-6 sm:p-8 border-ink-200 bg-white shadow-xs flex flex-col justify-between">
+              <div>
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-teal-100 text-teal-900 text-xs font-bold uppercase tracking-wider mb-2">
-                  <FileText className="h-3.5 w-3.5" /> Pay-Per-Material
+                  <BookOpen className="h-3.5 w-3.5" /> Course Pass
                 </div>
-                <h2 className="font-display text-xl sm:text-2xl font-bold text-ink-950">
-                  Single Resource & Practice Pass — ₦300
-                </h2>
-                <p className="mt-2 text-xs sm:text-sm text-ink-700 leading-relaxed">
-                  Only need one handout, a single test paper, or exam past question? Instead of paying for a whole level, pay <strong>₦300 per material</strong>. Paying unlocks the full document plus related test practice questions immediately!
+                <h3 className="font-display text-xl font-bold text-ink-950">
+                  {primaryCoursePkg ? primaryCoursePkg.name : 'Single Course Pass'}
+                </h3>
+
+                {primaryCoursePkg ? (
+                  <div className="my-3">
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-display text-3xl font-extrabold text-ink-950">
+                        ₦{(((primaryCoursePkg.effective_price_minor ?? primaryCoursePkg.price_minor)) / 100).toLocaleString()}
+                      </span>
+                      {primaryCoursePkg.effective_price_minor != null &&
+                        primaryCoursePkg.effective_price_minor < primaryCoursePkg.price_minor && (
+                          <span className="text-sm line-through text-ink-400 font-medium">
+                            ₦{(primaryCoursePkg.price_minor / 100).toLocaleString()}
+                          </span>
+                        )}
+                      <span className="text-xs font-normal text-ink-500">/ course</span>
+                    </div>
+                    {primaryCoursePkg.effective_price_minor != null &&
+                      primaryCoursePkg.effective_price_minor < primaryCoursePkg.price_minor ? (
+                      <Badge tone="green" className="mt-1 text-xs">
+                        Subscriber Discount Applied
+                      </Badge>
+                    ) : primaryCoursePkg.subscriber_price_minor ? (
+                      <p className="mt-1 text-xs text-teal-700 font-medium">
+                        ₦{(primaryCoursePkg.subscriber_price_minor / 100).toLocaleString()} for active subscribers
+                      </p>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="font-display text-3xl font-extrabold text-ink-950 my-3">
+                    ₦300 <span className="text-xs font-normal text-ink-500">/ course (₦200 for subscribers)</span>
+                  </div>
+                )}
+
+                <p className="text-xs sm:text-sm text-ink-600 leading-relaxed">
+                  Focus on a single course. Unlocks all handouts, lecture materials, and practice assessment questions for that course.
                 </p>
               </div>
 
-              <div className="shrink-0 text-center sm:text-right">
-                <div className="font-display text-3xl font-extrabold text-ink-950 mb-2">
-                  ₦300 <span className="text-xs font-normal text-ink-500">/ resource</span>
-                </div>
-                <Link to="/courses">
-                  <Button size="md" rightIcon={<ArrowRight className="h-4 w-4" />}>
-                    Browse Catalogue & Unlock
+              <div className="mt-6">
+                {primaryCoursePkg ? (
+                  <Button
+                    size="md"
+                    fullWidth
+                    onClick={() => void startCheckout(primaryCoursePkg)}
+                    loading={processingId === primaryCoursePkg.id}
+                  >
+                    Unlock Course (₦{(((primaryCoursePkg.effective_price_minor ?? primaryCoursePkg.price_minor)) / 100).toLocaleString()})
                   </Button>
-                </Link>
+                ) : (
+                  <Link to="/courses">
+                    <Button size="md" fullWidth variant="outline" rightIcon={<ArrowRight className="h-4 w-4" />}>
+                      Browse Courses
+                    </Button>
+                  </Link>
+                )}
               </div>
-            </div>
-          </Card>
+            </Card>
+
+            {/* Single Resource Pass */}
+            <Card className="p-6 sm:p-8 border-teal-200 bg-gradient-to-br from-teal-50/60 via-white to-blue-50/40 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-teal-100 text-teal-900 text-xs font-bold uppercase tracking-wider mb-2">
+                  <FileText className="h-3.5 w-3.5" /> Pay-Per-Material
+                </div>
+                <h3 className="font-display text-xl font-bold text-ink-950">
+                  {primaryResourcePkg ? primaryResourcePkg.name : 'Single Resource Pass'}
+                </h3>
+                <div className="font-display text-3xl font-extrabold text-ink-950 my-3">
+                  {primaryResourcePkg ? `₦${(primaryResourcePkg.price_minor / 100).toLocaleString()}` : '₦300'}{' '}
+                  <span className="text-xs font-normal text-ink-500">/ resource</span>
+                </div>
+                <p className="text-xs sm:text-sm text-ink-700 leading-relaxed">
+                  Need only one handout, a single test paper, or exam past question? Pay per material to unlock the document and related practice questions immediately.
+                </p>
+              </div>
+
+              <div className="mt-6">
+                {primaryResourcePkg ? (
+                  <Button
+                    size="md"
+                    fullWidth
+                    onClick={() => void startCheckout(primaryResourcePkg)}
+                    loading={processingId === primaryResourcePkg.id}
+                  >
+                    Unlock Material (₦{(primaryResourcePkg.price_minor / 100).toLocaleString()})
+                  </Button>
+                ) : (
+                  <Link to="/materials">
+                    <Button size="md" fullWidth rightIcon={<ArrowRight className="h-4 w-4" />}>
+                      Browse Materials
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            </Card>
+          </div>
 
           {/* Safety and Guarantee notice */}
           <div className="p-5 rounded-2xl bg-ink-50 border border-ink-100 flex items-start gap-3.5">

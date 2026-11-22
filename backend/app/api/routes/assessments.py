@@ -4,7 +4,13 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_admin, get_current_user, get_optional_user
+from app.api.dependencies import (
+    get_current_admin,
+    get_current_user,
+    get_optional_user,
+    get_user_capabilities,
+    require_capability,
+)
 from app.db.database import get_db
 from app.models.assessment import AssessmentConfig, AssessmentQuestion
 from app.models.user import Role, User
@@ -26,15 +32,19 @@ from app.services import assessments as service
 from app.services.errors import ConflictError, NotFoundError, PolicyError
 
 router = APIRouter(tags=["assessments"])
-admin_router = APIRouter(prefix="/admin/assessments", tags=["assessment administration"])
+admin_router = APIRouter(
+    prefix="/admin/assessments",
+    tags=["assessment administration"],
+    dependencies=[Depends(require_capability("manage_assessments"))],
+)
 
 
 def _is_admin(db: Session, user: User | None) -> bool:
     if user is None:
         return False
-    return user.is_superuser or db.scalar(
-        select(Role.id).where(Role.id == user.role_id, Role.name == "admin")
-    ) is not None
+    if user.is_superuser:
+        return True
+    return "manage_assessments" in get_user_capabilities(user, db)
 
 
 def _http(exc: Exception) -> HTTPException:

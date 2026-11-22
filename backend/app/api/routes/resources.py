@@ -18,7 +18,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import bearer_scheme, get_current_admin, get_current_user
+from app.api.dependencies import bearer_scheme, get_current_admin, get_current_user, get_user_capabilities, require_capability
 from app.core.config import settings
 from app.core.security import decode_access_token
 from app.db.database import get_db
@@ -64,7 +64,7 @@ from app.services.viewer import (
 )
 
 router = APIRouter(prefix="/resources", tags=["resources"])
-admin_router = APIRouter(prefix="/admin/resources", tags=["resource administration"])
+admin_router = APIRouter(prefix="/admin/resources", tags=["resource administration"], dependencies=[Depends(require_capability("manage_resources"))])
 
 
 def _get_resource_or_404(db: Session, resource_id: int) -> Resource:
@@ -79,9 +79,10 @@ def _read_upload(upload: UploadFile) -> bytes:
 
 
 def _is_admin(db: Session, user: User) -> bool:
-    return user.is_superuser or db.scalar(
-        select(Role.id).where(Role.id == user.role_id, Role.name == "admin")
-    ) is not None
+    if user.is_superuser:
+        return True
+    caps = get_user_capabilities(user, db)
+    return bool({"manage_resources", "preview_resources"} & caps)
 
 
 def _upload_error(exc: ValueError, content: bytes) -> HTTPException:
@@ -379,10 +380,11 @@ def viewer_manifest(
     expires = _aware(decision.expires_at) if decision.expires_at is not None else None
     offline_expires = min(offline_cap, expires) if expires is not None else offline_cap
 
+    audit_action = "admin.resource_previewed" if _is_admin(db, user) else "student.resource_viewed"
     db.add(
         AuditEvent(
             actor_user_id=user.id,
-            action="student.resource_viewed",
+            action=audit_action,
             target_type="resource",
             target_id=str(resource.id),
         )

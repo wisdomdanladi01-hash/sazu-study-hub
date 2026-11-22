@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
-import { adminService, type AdminDepartment, type AdminFaculty, type AdminProgramme } from '@/services/admin';
+import {
+  adminService,
+  type AdminAcademicSession,
+  type AdminDepartment,
+  type AdminFaculty,
+  type AdminProgramme,
+  type AdminSemester,
+} from '@/services/admin';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -12,22 +19,33 @@ import {
   Search,
   Edit2,
   RefreshCw,
+  Calendar,
+  CheckCircle2,
 } from 'lucide-react';
+import { formatDate } from '@/utils/format';
+
+type AcademicTab = 'sessions' | 'semesters' | 'faculties' | 'departments' | 'programmes';
 
 export function AdminAcademicPage() {
-  const [tab, setTab] = useState<'faculties' | 'departments' | 'programmes'>('faculties');
+  const [tab, setTab] = useState<AcademicTab>('sessions');
+  const [sessions, setSessions] = useState<AdminAcademicSession[]>([]);
+  const [semesters, setSemesters] = useState<AdminSemester[]>([]);
   const [faculties, setFaculties] = useState<AdminFaculty[]>([]);
   const [departments, setDepartments] = useState<AdminDepartment[]>([]);
   const [programmes, setProgrammes] = useState<AdminProgramme[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   // Filters
   const [search, setSearch] = useState('');
   const [facultyFilter, setFacultyFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [sessionFilter, setSessionFilter] = useState<string>('');
 
   // Modals
+  const [sessionModal, setSessionModal] = useState<{ open: boolean; item: AdminAcademicSession | null }>({ open: false, item: null });
+  const [semesterModal, setSemesterModal] = useState<{ open: boolean; item: AdminSemester | null }>({ open: false, item: null });
   const [facultyModal, setFacultyModal] = useState<{ open: boolean; item: AdminFaculty | null }>({ open: false, item: null });
   const [deptModal, setDeptModal] = useState<{ open: boolean; item: AdminDepartment | null }>({ open: false, item: null });
   const [progModal, setProgModal] = useState<{ open: boolean; item: AdminProgramme | null }>({ open: false, item: null });
@@ -36,11 +54,15 @@ export function AdminAcademicPage() {
     setLoading(true);
     setError(null);
     Promise.all([
+      adminService.listSessions().catch(() => [] as AdminAcademicSession[]),
+      adminService.listSemesters().catch(() => [] as AdminSemester[]),
       adminService.listFaculties(),
       adminService.listDepartments(),
       adminService.listProgrammes(),
     ])
-      .then(([f, d, p]) => {
+      .then(([s, sem, f, d, p]) => {
+        setSessions(s);
+        setSemesters(sem);
         setFaculties(f);
         setDepartments(d);
         setProgrammes(p);
@@ -53,19 +75,39 @@ export function AdminAcademicPage() {
     loadData();
   }, []);
 
+  const handleToggleSessionActive = async (session: AdminAcademicSession) => {
+    try {
+      await adminService.updateSession(session.id, { is_active: !session.is_active });
+      setSuccess(`Academic session ${session.name} is now ${!session.is_active ? 'active' : 'inactive'}.`);
+      loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to update session status.');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl font-bold text-ink-950">Academic Directory</h1>
           <p className="mt-1 text-sm text-ink-600">
-            Manage institutions, faculties, departments, and degree programmes.
+            Manage academic sessions, semesters, faculties, departments, and degree programmes.
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={loadData} loading={loading} leftIcon={<RefreshCw className="h-4 w-4" />}>
             Refresh
           </Button>
+          {tab === 'sessions' && (
+            <Button size="sm" onClick={() => setSessionModal({ open: true, item: null })} leftIcon={<Plus className="h-4 w-4" />}>
+              Add Session
+            </Button>
+          )}
+          {tab === 'semesters' && (
+            <Button size="sm" onClick={() => setSemesterModal({ open: true, item: null })} leftIcon={<Plus className="h-4 w-4" />}>
+              Add Semester
+            </Button>
+          )}
           {tab === 'faculties' && (
             <Button size="sm" onClick={() => setFacultyModal({ open: true, item: null })} leftIcon={<Plus className="h-4 w-4" />}>
               Add Faculty
@@ -85,36 +127,59 @@ export function AdminAcademicPage() {
       </div>
 
       {error && <Alert tone="error">{error}</Alert>}
+      {success && (
+        <Alert tone="success" onClose={() => setSuccess(null)}>
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <span>{success}</span>
+          </div>
+        </Alert>
+      )}
 
       {/* Tabs */}
-      <div className="border-b border-ink-200 flex gap-2">
+      <div className="border-b border-ink-200 flex gap-2 overflow-x-auto">
+        <button
+          onClick={() => { setTab('sessions'); setSearch(''); }}
+          className={`pb-3 px-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${tab === 'sessions'
+            ? 'border-teal-600 text-teal-800'
+            : 'border-transparent text-ink-500 hover:text-ink-800'
+            }`}
+        >
+          Academic Sessions ({sessions.length})
+        </button>
+        <button
+          onClick={() => { setTab('semesters'); setSearch(''); }}
+          className={`pb-3 px-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${tab === 'semesters'
+            ? 'border-teal-600 text-teal-800'
+            : 'border-transparent text-ink-500 hover:text-ink-800'
+            }`}
+        >
+          Semesters ({semesters.length})
+        </button>
         <button
           onClick={() => { setTab('faculties'); setSearch(''); }}
-          className={`pb-3 px-3 text-sm font-bold border-b-2 transition-colors ${
-            tab === 'faculties'
-              ? 'border-teal-600 text-teal-800'
-              : 'border-transparent text-ink-500 hover:text-ink-800'
-          }`}
+          className={`pb-3 px-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${tab === 'faculties'
+            ? 'border-teal-600 text-teal-800'
+            : 'border-transparent text-ink-500 hover:text-ink-800'
+            }`}
         >
           Faculties ({faculties.length})
         </button>
         <button
           onClick={() => { setTab('departments'); setSearch(''); }}
-          className={`pb-3 px-3 text-sm font-bold border-b-2 transition-colors ${
-            tab === 'departments'
-              ? 'border-teal-600 text-teal-800'
-              : 'border-transparent text-ink-500 hover:text-ink-800'
-          }`}
+          className={`pb-3 px-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${tab === 'departments'
+            ? 'border-teal-600 text-teal-800'
+            : 'border-transparent text-ink-500 hover:text-ink-800'
+            }`}
         >
           Departments ({departments.length})
         </button>
         <button
           onClick={() => { setTab('programmes'); setSearch(''); }}
-          className={`pb-3 px-3 text-sm font-bold border-b-2 transition-colors ${
-            tab === 'programmes'
-              ? 'border-teal-600 text-teal-800'
-              : 'border-transparent text-ink-500 hover:text-ink-800'
-          }`}
+          className={`pb-3 px-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${tab === 'programmes'
+            ? 'border-teal-600 text-teal-800'
+            : 'border-transparent text-ink-500 hover:text-ink-800'
+            }`}
         >
           Programmes ({programmes.length})
         </button>
@@ -125,77 +190,324 @@ export function AdminAcademicPage() {
         <div className="flex-1">
           <Input
             type="search"
-            placeholder={`Search ${tab} by name or code…`}
+            placeholder={`Search ${tab}…`}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             leftIcon={<Search className="h-4 w-4" />}
           />
         </div>
-        {(tab === 'departments' || tab === 'programmes') && (
-          <Select value={facultyFilter} onChange={(e) => setFacultyFilter(e.target.value)} className="sm:w-60">
-            <option value="">All faculties</option>
-            {faculties.map((f) => (
-              <option key={f.id} value={f.id}>{f.name}</option>
-            ))}
-          </Select>
+        {tab === 'semesters' && (
+          <div className="w-full sm:w-64">
+            <Select value={sessionFilter} onChange={(e) => setSessionFilter(e.target.value)}>
+              <option value="">All Academic Sessions</option>
+              {sessions.map((s) => (
+                <option key={s.id} value={s.id}>{s.name} {s.is_active ? '(Active)' : ''}</option>
+              ))}
+            </Select>
+          </div>
         )}
-        {tab === 'programmes' && (
-          <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="sm:w-48">
-            <option value="">All statuses</option>
-            <option value="active">Active</option>
-            <option value="approved_not_commenced">Approved (not commenced)</option>
-            <option value="pending_confirmation">Pending confirmation</option>
-            <option value="inactive">Inactive</option>
-          </Select>
+        {(tab === 'departments' || tab === 'programmes') && (
+          <div className="w-full sm:w-64">
+            <Select value={facultyFilter} onChange={(e) => setFacultyFilter(e.target.value)}>
+              <option value="">All Faculties</option>
+              {faculties.map((f) => (
+                <option key={f.id} value={f.id}>{f.name}</option>
+              ))}
+            </Select>
+          </div>
+        )}
+        {(tab === 'departments' || tab === 'programmes') && (
+          <div className="w-full sm:w-48">
+            <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="approved_not_commenced">Approved (not commenced)</option>
+              <option value="pending_confirmation">Pending confirmation</option>
+              <option value="inactive">Inactive</option>
+            </Select>
+          </div>
         )}
       </div>
 
-      {/* Tables based on selected tab */}
+      {/* TAB 1: SESSIONS */}
+      {tab === 'sessions' && (
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-ink-50/50 border-b border-ink-100 text-xs font-bold uppercase text-ink-600">
+                <tr>
+                  <th className="px-4 py-3">Session Name</th>
+                  <th className="px-4 py-3">Starts On</th>
+                  <th className="px-4 py-3">Ends On</th>
+                  <th className="px-4 py-3">Active Status</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-ink-100">
+                {sessions
+                  .filter((s) => !search || s.name.toLowerCase().includes(search.toLowerCase()))
+                  .map((s) => (
+                    <tr key={s.id} className="hover:bg-ink-50/50">
+                      <td className="px-4 py-3 font-semibold text-ink-900">{s.name}</td>
+                      <td className="px-4 py-3 text-xs text-ink-600">{formatDate(s.starts_on)}</td>
+                      <td className="px-4 py-3 text-xs text-ink-600">{formatDate(s.ends_on)}</td>
+                      <td className="px-4 py-3">
+                        <Badge tone={s.is_active ? 'green' : 'neutral'}>
+                          {s.is_active ? 'Active Current Session' : 'Inactive'}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-right space-x-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleToggleSessionActive(s)}
+                        >
+                          {s.is_active ? 'Set Inactive' : 'Set Active'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setSessionModal({ open: true, item: s })}
+                          leftIcon={<Edit2 className="h-3.5 w-3.5" />}
+                        >
+                          Edit
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* TAB 2: SEMESTERS */}
+      {tab === 'semesters' && (
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-ink-50/50 border-b border-ink-100 text-xs font-bold uppercase text-ink-600">
+                <tr>
+                  <th className="px-4 py-3">Academic Session</th>
+                  <th className="px-4 py-3">Semester</th>
+                  <th className="px-4 py-3">Starts On</th>
+                  <th className="px-4 py-3">Ends On</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-ink-100">
+                {semesters
+                  .filter((sem) => {
+                    if (sessionFilter && String(sem.academic_session_id) !== sessionFilter) return false;
+                    const sess = sessions.find((s) => s.id === sem.academic_session_id);
+                    const label = `${sess?.name ?? ''} Semester ${sem.number}`;
+                    return !search || label.toLowerCase().includes(search.toLowerCase());
+                  })
+                  .map((sem) => {
+                    const sess = sessions.find((s) => s.id === sem.academic_session_id);
+                    return (
+                      <tr key={sem.id} className="hover:bg-ink-50/50">
+                        <td className="px-4 py-3 font-semibold text-ink-900">
+                          {sess?.name ?? `Session #${sem.academic_session_id}`}
+                          {sess?.is_active && (
+                            <Badge tone="teal" className="ml-2 text-[10px]">Active</Badge>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 font-medium text-ink-800">
+                          {sem.number === 1 ? '1st Semester' : sem.number === 2 ? '2nd Semester' : `Semester ${sem.number}`}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-ink-600">{formatDate(sem.starts_on)}</td>
+                        <td className="px-4 py-3 text-xs text-ink-600">{formatDate(sem.ends_on)}</td>
+                        <td className="px-4 py-3 text-right">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setSemesterModal({ open: true, item: sem })}
+                            leftIcon={<Edit2 className="h-3.5 w-3.5" />}
+                          >
+                            Edit
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* TAB 3: FACULTIES */}
       {tab === 'faculties' && (
-        <FacultiesTable
-          items={faculties.filter((f) =>
-            !search || f.name.toLowerCase().includes(search.toLowerCase()) || f.code.toLowerCase().includes(search.toLowerCase())
-          )}
-          onEdit={(item) => setFacultyModal({ open: true, item })}
-        />
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-ink-50/50 border-b border-ink-100 text-xs font-bold uppercase text-ink-600">
+                <tr>
+                  <th className="px-4 py-3">Code</th>
+                  <th className="px-4 py-3">Name</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-ink-100">
+                {faculties
+                  .filter((f) => !search || f.name.toLowerCase().includes(search.toLowerCase()) || f.code.toLowerCase().includes(search.toLowerCase()))
+                  .map((f) => (
+                    <tr key={f.id} className="hover:bg-ink-50/50">
+                      <td className="px-4 py-3 font-mono text-xs font-bold text-ink-900">{f.code}</td>
+                      <td className="px-4 py-3 font-semibold text-ink-900">{f.name}</td>
+                      <td className="px-4 py-3">
+                        <Badge tone={f.is_active ? 'green' : 'neutral'}>
+                          {f.is_active ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Button size="sm" variant="ghost" onClick={() => setFacultyModal({ open: true, item: f })} leftIcon={<Edit2 className="h-3.5 w-3.5" />}>
+                          Edit
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
 
+      {/* TAB 4: DEPARTMENTS */}
       {tab === 'departments' && (
-        <DepartmentsTable
-          items={departments.filter((d) => {
-            const matchesSearch = !search || d.name.toLowerCase().includes(search.toLowerCase()) || d.code.toLowerCase().includes(search.toLowerCase());
-            const matchesFaculty = !facultyFilter || String(d.faculty_id) === facultyFilter;
-            return matchesSearch && matchesFaculty;
-          })}
-          faculties={faculties}
-          onEdit={(item) => setDeptModal({ open: true, item })}
-        />
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-ink-50/50 border-b border-ink-100 text-xs font-bold uppercase text-ink-600">
+                <tr>
+                  <th className="px-4 py-3">Code</th>
+                  <th className="px-4 py-3">Name</th>
+                  <th className="px-4 py-3">Parent Faculty</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-ink-100">
+                {departments
+                  .filter((d) => {
+                    if (facultyFilter && String(d.faculty_id) !== facultyFilter) return false;
+                    if (statusFilter && d.status !== statusFilter) return false;
+                    return !search || d.name.toLowerCase().includes(search.toLowerCase()) || d.code.toLowerCase().includes(search.toLowerCase());
+                  })
+                  .map((d) => {
+                    const parentFaculty = faculties.find((f) => f.id === d.faculty_id);
+                    return (
+                      <tr key={d.id} className="hover:bg-ink-50/50">
+                        <td className="px-4 py-3 font-mono text-xs font-bold text-ink-900">{d.code}</td>
+                        <td className="px-4 py-3 font-semibold text-ink-900">{d.name}</td>
+                        <td className="px-4 py-3 text-xs text-ink-600">
+                          {parentFaculty?.name ?? <span className="text-ink-400 italic">None assigned</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge tone={d.status === 'active' ? 'green' : 'amber'}>
+                            {d.status}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Button size="sm" variant="ghost" onClick={() => setDeptModal({ open: true, item: d })} leftIcon={<Edit2 className="h-3.5 w-3.5" />}>
+                            Edit
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
 
+      {/* TAB 5: PROGRAMMES */}
       {tab === 'programmes' && (
-        <ProgrammesTable
-          items={programmes.filter((p) => {
-            const matchesSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase());
-            const matchesFaculty = !facultyFilter || String(p.faculty_id) === facultyFilter;
-            const matchesStatus = !statusFilter || p.status === statusFilter;
-            return matchesSearch && matchesFaculty && matchesStatus;
-          })}
-          faculties={faculties}
-          onEdit={(item) => setProgModal({ open: true, item })}
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-ink-50/50 border-b border-ink-100 text-xs font-bold uppercase text-ink-600">
+                <tr>
+                  <th className="px-4 py-3">Code</th>
+                  <th className="px-4 py-3">Programme Title</th>
+                  <th className="px-4 py-3">Faculty</th>
+                  <th className="px-4 py-3">Award / Level</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-ink-100">
+                {programmes
+                  .filter((p) => {
+                    if (facultyFilter && String(p.faculty_id) !== facultyFilter) return false;
+                    if (statusFilter && p.status !== statusFilter) return false;
+                    return !search || p.name.toLowerCase().includes(search.toLowerCase()) || p.code.toLowerCase().includes(search.toLowerCase());
+                  })
+                  .map((p) => {
+                    const parentFaculty = faculties.find((f) => f.id === p.faculty_id);
+                    return (
+                      <tr key={p.id} className="hover:bg-ink-50/50">
+                        <td className="px-4 py-3 font-mono text-xs font-bold text-ink-900">{p.code}</td>
+                        <td className="px-4 py-3 font-semibold text-ink-900">{p.name}</td>
+                        <td className="px-4 py-3 text-xs text-ink-600">
+                          {parentFaculty?.name ?? <span className="text-ink-400 italic">None assigned</span>}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-ink-600">
+                          {p.award ?? 'Degree'} &middot; <span className="capitalize">{p.study_level}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge tone={p.status === 'active' ? 'green' : 'amber'}>
+                            {p.status}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Button size="sm" variant="ghost" onClick={() => setProgModal({ open: true, item: p })} leftIcon={<Edit2 className="h-3.5 w-3.5" />}>
+                            Edit
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* SESSION MODAL */}
+      {sessionModal.open && (
+        <SessionModal
+          item={sessionModal.item}
+          onClose={() => setSessionModal({ open: false, item: null })}
+          onSuccess={() => { setSessionModal({ open: false, item: null }); loadData(); }}
         />
       )}
 
-      {/* Modals for Create / Edit */}
+      {/* SEMESTER MODAL */}
+      {semesterModal.open && (
+        <SemesterModal
+          item={semesterModal.item}
+          sessions={sessions}
+          onClose={() => setSemesterModal({ open: false, item: null })}
+          onSuccess={() => { setSemesterModal({ open: false, item: null }); loadData(); }}
+        />
+      )}
+
+      {/* FACULTY MODAL */}
       {facultyModal.open && (
-        <FacultyFormModal
+        <FacultyModal
           item={facultyModal.item}
           onClose={() => setFacultyModal({ open: false, item: null })}
           onSuccess={() => { setFacultyModal({ open: false, item: null }); loadData(); }}
         />
       )}
 
+      {/* DEPARTMENT MODAL */}
       {deptModal.open && (
-        <DepartmentFormModal
+        <DepartmentModal
           item={deptModal.item}
           faculties={faculties}
           programmes={programmes}
@@ -204,8 +516,9 @@ export function AdminAcademicPage() {
         />
       )}
 
+      {/* PROGRAMME MODAL */}
       {progModal.open && (
-        <ProgrammeFormModal
+        <ProgrammeModal
           item={progModal.item}
           faculties={faculties}
           onClose={() => setProgModal({ open: false, item: null })}
@@ -216,147 +529,222 @@ export function AdminAcademicPage() {
   );
 }
 
-function FacultiesTable({ items, onEdit }: { items: AdminFaculty[]; onEdit: (f: AdminFaculty) => void }) {
-  if (items.length === 0) return <Card className="p-8 text-center text-sm text-ink-500">No faculties match criteria.</Card>;
-  return (
-    <Card className="overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-ink-50 border-b border-ink-100 text-xs font-bold uppercase text-ink-600">
-            <tr>
-              <th className="px-5 py-3.5">Code</th>
-              <th className="px-5 py-3.5">Faculty Name</th>
-              <th className="px-5 py-3.5">Status</th>
-              <th className="px-5 py-3.5 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-ink-100">
-            {items.map((f) => (
-              <tr key={f.id} className="hover:bg-ink-50/50">
-                <td className="px-5 py-3.5 font-mono text-xs font-bold text-ink-700">{f.code}</td>
-                <td className="px-5 py-3.5 font-semibold text-ink-900">{f.name}</td>
-                <td className="px-5 py-3.5">
-                  <Badge tone={f.is_active ? 'green' : 'neutral'}>{f.is_active ? 'Active' : 'Inactive'}</Badge>
-                </td>
-                <td className="px-5 py-3.5 text-right">
-                  <Button size="sm" variant="ghost" onClick={() => onEdit(f)} leftIcon={<Edit2 className="h-3.5 w-3.5" />}>
-                    Edit
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Card>
-  );
-}
-
-function DepartmentsTable({
-  items,
-  faculties,
-  onEdit,
+// -------------------------------------------------------------
+// SESSION MODAL
+// -------------------------------------------------------------
+function SessionModal({
+  item,
+  onClose,
+  onSuccess,
 }: {
-  items: AdminDepartment[];
-  faculties: AdminFaculty[];
-  onEdit: (d: AdminDepartment) => void;
+  item: AdminAcademicSession | null;
+  onClose: () => void;
+  onSuccess: () => void;
 }) {
-  if (items.length === 0) return <Card className="p-8 text-center text-sm text-ink-500">No departments match criteria.</Card>;
-  const facultyMap = new Map(faculties.map((f) => [f.id, f.name]));
+  const [name, setName] = useState(item?.name ?? '');
+  const [startsOn, setStartsOn] = useState(item?.starts_on ?? '');
+  const [endsOn, setEndsOn] = useState(item?.ends_on ?? '');
+  const [isActive, setIsActive] = useState(item?.is_active ?? false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (new Date(endsOn) <= new Date(startsOn)) {
+      setErr('Session end date must be later than start date.');
+      return;
+    }
+    setSaving(true);
+    setErr(null);
+    try {
+      if (item) {
+        await adminService.updateSession(item.id, {
+          name: name.trim(),
+          starts_on: startsOn,
+          ends_on: endsOn,
+          is_active: isActive,
+        });
+      } else {
+        await adminService.createSession({
+          name: name.trim(),
+          starts_on: startsOn,
+          ends_on: endsOn,
+          is_active: isActive,
+        });
+      }
+      onSuccess();
+    } catch (cause) {
+      setErr(cause instanceof Error ? cause.message : 'Unable to save academic session.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <Card className="overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-ink-50 border-b border-ink-100 text-xs font-bold uppercase text-ink-600">
-            <tr>
-              <th className="px-5 py-3.5">Code</th>
-              <th className="px-5 py-3.5">Department Name</th>
-              <th className="px-5 py-3.5">Faculty</th>
-              <th className="px-5 py-3.5">Status</th>
-              <th className="px-5 py-3.5 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-ink-100">
-            {items.map((d) => (
-              <tr key={d.id} className="hover:bg-ink-50/50">
-                <td className="px-5 py-3.5 font-mono text-xs font-bold text-ink-700">{d.code}</td>
-                <td className="px-5 py-3.5 font-semibold text-ink-900">{d.name}</td>
-                <td className="px-5 py-3.5 text-xs text-ink-600">
-                  {d.faculty_id ? facultyMap.get(d.faculty_id) ?? `Faculty ${d.faculty_id}` : <span className="italic text-ink-400">Unassigned</span>}
-                </td>
-                <td className="px-5 py-3.5">
-                  <Badge tone={d.status === 'active' ? 'green' : 'amber'}>{d.status}</Badge>
-                </td>
-                <td className="px-5 py-3.5 text-right">
-                  <Button size="sm" variant="ghost" onClick={() => onEdit(d)} leftIcon={<Edit2 className="h-3.5 w-3.5" />}>
-                    Edit
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Card>
+    <Dialog open onClose={onClose} title={item ? 'Edit Academic Session' : 'Add Academic Session'}>
+      <form onSubmit={save} className="space-y-4">
+        {err && <Alert tone="error">{err}</Alert>}
+        <Input
+          label="Session Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+          placeholder="e.g. 2026/2027"
+        />
+        <div className="grid sm:grid-cols-2 gap-3">
+          <Input
+            label="Starts On"
+            type="date"
+            value={startsOn}
+            onChange={(e) => setStartsOn(e.target.value)}
+            required
+          />
+          <Input
+            label="Ends On"
+            type="date"
+            value={endsOn}
+            onChange={(e) => setEndsOn(e.target.value)}
+            required
+          />
+        </div>
+        <div className="flex items-center gap-2 pt-2">
+          <input
+            type="checkbox"
+            id="is_active"
+            checked={isActive}
+            onChange={(e) => setIsActive(e.target.checked)}
+            className="rounded border-ink-300 text-teal-600 focus:ring-teal-500 h-4 w-4"
+          />
+          <label htmlFor="is_active" className="text-sm font-medium text-ink-800">
+            Current Active Academic Session
+          </label>
+        </div>
+        <div className="mt-6 flex justify-end gap-2.5">
+          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+          <Button type="submit" loading={saving}>Save Academic Session</Button>
+        </div>
+      </form>
+    </Dialog>
   );
 }
 
-function ProgrammesTable({
-  items,
-  faculties,
-  onEdit,
+// -------------------------------------------------------------
+// SEMESTER MODAL
+// -------------------------------------------------------------
+function SemesterModal({
+  item,
+  sessions,
+  onClose,
+  onSuccess,
 }: {
-  items: AdminProgramme[];
-  faculties: AdminFaculty[];
-  onEdit: (p: AdminProgramme) => void;
+  item: AdminSemester | null;
+  sessions: AdminAcademicSession[];
+  onClose: () => void;
+  onSuccess: () => void;
 }) {
-  if (items.length === 0) return <Card className="p-8 text-center text-sm text-ink-500">No programmes match criteria.</Card>;
-  const facultyMap = new Map(faculties.map((f) => [f.id, f.name]));
+  const [sessionId, setSessionId] = useState(item?.academic_session_id ? String(item.academic_session_id) : (sessions[0]?.id ? String(sessions[0].id) : ''));
+  const [number, setNumber] = useState(item?.number ? String(item.number) : '1');
+  const [startsOn, setStartsOn] = useState(item?.starts_on ?? '');
+  const [endsOn, setEndsOn] = useState(item?.ends_on ?? '');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sessionId) {
+      setErr('Please select an academic session.');
+      return;
+    }
+    if (new Date(endsOn) <= new Date(startsOn)) {
+      setErr('Semester end date must be later than start date.');
+      return;
+    }
+    setSaving(true);
+    setErr(null);
+    try {
+      if (item) {
+        await adminService.updateSemester(item.id, {
+          academic_session_id: Number(sessionId),
+          number: Number(number),
+          starts_on: startsOn,
+          ends_on: endsOn,
+        });
+      } else {
+        await adminService.createSemester({
+          academic_session_id: Number(sessionId),
+          number: Number(number),
+          starts_on: startsOn,
+          ends_on: endsOn,
+        });
+      }
+      onSuccess();
+    } catch (cause) {
+      setErr(cause instanceof Error ? cause.message : 'Unable to save semester.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <Card className="overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-ink-50 border-b border-ink-100 text-xs font-bold uppercase text-ink-600">
-            <tr>
-              <th className="px-5 py-3.5">Code</th>
-              <th className="px-5 py-3.5">Programme Title</th>
-              <th className="px-5 py-3.5">Award / Level</th>
-              <th className="px-5 py-3.5">Faculty</th>
-              <th className="px-5 py-3.5">Verification Status</th>
-              <th className="px-5 py-3.5 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-ink-100">
-            {items.map((p) => (
-              <tr key={p.id} className="hover:bg-ink-50/50">
-                <td className="px-5 py-3.5 font-mono text-xs font-bold text-ink-700">{p.code}</td>
-                <td className="px-5 py-3.5 font-semibold text-ink-900">{p.name}</td>
-                <td className="px-5 py-3.5 text-xs text-ink-600">
-                  {p.award ? `${p.award} · ` : ''}{p.study_level}
-                </td>
-                <td className="px-5 py-3.5 text-xs text-ink-600">
-                  {p.faculty_id ? facultyMap.get(p.faculty_id) ?? `Faculty ${p.faculty_id}` : <span className="italic text-amber-700">Pending Assignment</span>}
-                </td>
-                <td className="px-5 py-3.5">
-                  <Badge tone={p.status === 'active' ? 'green' : p.status === 'approved_not_commenced' ? 'blue' : 'amber'}>
-                    {p.status}
-                  </Badge>
-                </td>
-                <td className="px-5 py-3.5 text-right">
-                  <Button size="sm" variant="ghost" onClick={() => onEdit(p)} leftIcon={<Edit2 className="h-3.5 w-3.5" />}>
-                    Edit
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Card>
+    <Dialog open onClose={onClose} title={item ? 'Edit Semester' : 'Add Semester'}>
+      <form onSubmit={save} className="space-y-4">
+        {err && <Alert tone="error">{err}</Alert>}
+        <Select
+          label="Academic Session"
+          value={sessionId}
+          onChange={(e) => setSessionId(e.target.value)}
+          required
+        >
+          {sessions.map((s) => (
+            <option key={s.id} value={s.id}>{s.name} {s.is_active ? '(Active)' : ''}</option>
+          ))}
+        </Select>
+        <Select
+          label="Semester Term"
+          value={number}
+          onChange={(e) => setNumber(e.target.value)}
+          required
+        >
+          <option value="1">1st Semester</option>
+          <option value="2">2nd Semester</option>
+        </Select>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <Input
+            label="Starts On"
+            type="date"
+            value={startsOn}
+            onChange={(e) => setStartsOn(e.target.value)}
+            required
+          />
+          <Input
+            label="Ends On"
+            type="date"
+            value={endsOn}
+            onChange={(e) => setEndsOn(e.target.value)}
+            required
+          />
+        </div>
+        <div className="mt-6 flex justify-end gap-2.5">
+          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+          <Button type="submit" loading={saving}>Save Semester</Button>
+        </div>
+      </form>
+    </Dialog>
   );
 }
 
-function FacultyFormModal({ item, onClose, onSuccess }: { item: AdminFaculty | null; onClose: () => void; onSuccess: () => void }) {
+// -------------------------------------------------------------
+// FACULTY MODAL
+// -------------------------------------------------------------
+function FacultyModal({
+  item,
+  onClose,
+  onSuccess,
+}: {
+  item: AdminFaculty | null;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
   const [code, setCode] = useState(item?.code ?? '');
   const [name, setName] = useState(item?.name ?? '');
   const [saving, setSaving] = useState(false);
@@ -370,7 +758,7 @@ function FacultyFormModal({ item, onClose, onSuccess }: { item: AdminFaculty | n
       if (item) {
         await adminService.updateFaculty(item.id, { name: name.trim() });
       } else {
-        await adminService.createFaculty({ code: code.trim(), name: name.trim() });
+        await adminService.createFaculty({ code: code.trim().toUpperCase(), name: name.trim() });
       }
       onSuccess();
     } catch (cause) {
@@ -383,7 +771,7 @@ function FacultyFormModal({ item, onClose, onSuccess }: { item: AdminFaculty | n
     <Dialog open onClose={onClose} title={item ? 'Edit Faculty' : 'Add Faculty'}>
       <form onSubmit={save} className="space-y-4">
         {err && <Alert tone="error">{err}</Alert>}
-        <Input label="Faculty code" value={code} onChange={(e) => setCode(e.target.value)} disabled={Boolean(item)} required placeholder="e.g. science" />
+        <Input label="Faculty code" value={code} onChange={(e) => setCode(e.target.value)} disabled={Boolean(item)} required placeholder="e.g. SCI" />
         <Input label="Faculty name" value={name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Faculty of Science" />
         <div className="mt-6 flex justify-end gap-2.5">
           <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
@@ -394,9 +782,13 @@ function FacultyFormModal({ item, onClose, onSuccess }: { item: AdminFaculty | n
   );
 }
 
-function DepartmentFormModal({
+// -------------------------------------------------------------
+// DEPARTMENT MODAL
+// -------------------------------------------------------------
+function DepartmentModal({
   item,
   faculties,
+  programmes,
   onClose,
   onSuccess,
 }: {
@@ -408,8 +800,10 @@ function DepartmentFormModal({
 }) {
   const [code, setCode] = useState(item?.code ?? '');
   const [name, setName] = useState(item?.name ?? '');
-  const [facultyId, setFacultyId] = useState(item?.faculty_id ? String(item.faculty_id) : '');
-  const [status, setStatus] = useState(item?.status ?? 'active');
+  const [facultyId, setFacultyId] = useState<string>(item?.faculty_id ? String(item.faculty_id) : '');
+  const [programmeId, setProgrammeId] = useState<string>(item?.programme_id ? String(item.programme_id) : '');
+  const [status, setStatus] = useState<string>(item?.status ?? 'active');
+  const [sourceNote, setSourceNote] = useState<string>(item?.source_note ?? '');
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -422,14 +816,18 @@ function DepartmentFormModal({
         await adminService.updateDepartment(item.id, {
           name: name.trim(),
           faculty_id: facultyId ? Number(facultyId) : null,
+          programme_id: programmeId ? Number(programmeId) : null,
           status,
+          source_note: sourceNote.trim() || null,
         });
       } else {
         await adminService.createDepartment({
           code: code.trim().toUpperCase(),
           name: name.trim(),
           faculty_id: facultyId ? Number(facultyId) : null,
+          programme_id: programmeId ? Number(programmeId) : null,
           status,
+          source_note: sourceNote.trim() || null,
         });
       }
       onSuccess();
@@ -443,19 +841,27 @@ function DepartmentFormModal({
     <Dialog open onClose={onClose} title={item ? 'Edit Department' : 'Add Department'}>
       <form onSubmit={save} className="space-y-4">
         {err && <Alert tone="error">{err}</Alert>}
-        <Input label="Department code" value={code} onChange={(e) => setCode(e.target.value)} disabled={Boolean(item)} required placeholder="e.g. COMPUTER-SCIENCE" />
-        <Input label="Department name" value={name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Department of Mathematical Sciences" />
-        <Select label="Faculty assignment" value={facultyId} onChange={(e) => setFacultyId(e.target.value)}>
-          <option value="">No faculty (pending confirmation)</option>
+        <Input label="Department code" value={code} onChange={(e) => setCode(e.target.value)} disabled={Boolean(item)} required placeholder="e.g. CMP" />
+        <Input label="Department name" value={name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Computer Science" />
+        <Select label="Parent faculty" value={facultyId} onChange={(e) => setFacultyId(e.target.value)}>
+          <option value="">Pending faculty assignment</option>
           {faculties.map((f) => (
             <option key={f.id} value={f.id}>{f.name}</option>
           ))}
         </Select>
-        <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
+        <Select label="Primary degree programme" value={programmeId} onChange={(e) => setProgrammeId(e.target.value)}>
+          <option value="">No primary programme linked</option>
+          {programmes.map((p) => (
+            <option key={p.id} value={p.id}>{p.code} &middot; {p.name}</option>
+          ))}
+        </Select>
+        <Select label="Verification status" value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="active">Active</option>
+          <option value="approved_not_commenced">Approved (not yet commenced)</option>
           <option value="pending_confirmation">Pending confirmation</option>
           <option value="inactive">Inactive</option>
         </Select>
+        <Input label="Source / Verification Note" value={sourceNote} onChange={(e) => setSourceNote(e.target.value)} placeholder="e.g. Approved 2026/2027 by Senate" />
         <div className="mt-6 flex justify-end gap-2.5">
           <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
           <Button type="submit" loading={saving}>Save department</Button>
@@ -465,7 +871,10 @@ function DepartmentFormModal({
   );
 }
 
-function ProgrammeFormModal({
+// -------------------------------------------------------------
+// PROGRAMME MODAL
+// -------------------------------------------------------------
+function ProgrammeModal({
   item,
   faculties,
   onClose,
@@ -478,11 +887,11 @@ function ProgrammeFormModal({
 }) {
   const [code, setCode] = useState(item?.code ?? '');
   const [name, setName] = useState(item?.name ?? '');
-  const [facultyId, setFacultyId] = useState(item?.faculty_id ? String(item.faculty_id) : '');
+  const [facultyId, setFacultyId] = useState<string>(item?.faculty_id ? String(item.faculty_id) : '');
   const [award, setAward] = useState(item?.award ?? 'B.Sc.');
   const [studyLevel, setStudyLevel] = useState(item?.study_level ?? 'undergraduate');
-  const [status, setStatus] = useState(item?.status ?? 'active');
-  const [sourceNote, setSourceNote] = useState(item?.source_note ?? '');
+  const [status, setStatus] = useState<string>(item?.status ?? 'active');
+  const [sourceNote, setSourceNote] = useState<string>(item?.source_note ?? '');
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 

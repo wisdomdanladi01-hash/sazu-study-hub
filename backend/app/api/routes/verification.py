@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_admin, get_current_user
+from app.api.dependencies import get_current_admin, get_current_user, get_user_capabilities, require_capability
 from app.core.config import settings
 from app.db.database import get_db
 from app.models.identity import VerificationSubmission
@@ -31,7 +31,11 @@ from app.services.verification import (
 )
 
 router = APIRouter(prefix="/verification", tags=["student verification"])
-admin_router = APIRouter(prefix="/admin/verification", tags=["verification administration"])
+admin_router = APIRouter(
+    prefix="/admin/verification",
+    tags=["verification administration"],
+    dependencies=[Depends(require_capability("manage_verifications"))],
+)
 
 
 def _submission_response(submission: VerificationSubmission) -> VerificationSubmissionResponse:
@@ -127,9 +131,7 @@ def read_verification_document(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> FileResponse:
-    is_admin = user.is_superuser or db.scalar(
-        select(Role.id).where(Role.id == user.role_id, Role.name == "admin")
-    ) is not None
+    is_admin = user.is_superuser or ("manage_verifications" in get_user_capabilities(user, db))
     try:
         document, path = get_authorized_verification_document(
             db, user, document_id, is_admin

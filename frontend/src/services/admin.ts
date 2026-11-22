@@ -12,10 +12,57 @@ export interface AdminSubscriptionPackage {
   id: number;
   name: string;
   description: string | null;
+  package_type: 'subscription' | 'semester' | 'session' | 'level' | 'course' | 'resource' | 'resource_package';
   price_minor: number;
+  subscriber_price_minor?: number | null;
   currency: string;
-  semester_id: number;
+  semester_id: number | null;
+  academic_session_id: number | null;
+  academic_level_id?: number | null;
+  course_id: number | null;
+  resource_id: number | null;
+  target_name?: string | null;
+  semester_starts_on?: string | null;
+  semester_ends_on?: string | null;
+  available_from?: string | null;
+  available_until?: string | null;
   is_active: boolean;
+  buyers_count?: number;
+  total_revenue_minor?: number;
+}
+
+export interface AdminAcademicSession {
+  id: number;
+  name: string;
+  starts_on: string;
+  ends_on: string;
+  is_active: boolean;
+}
+
+export interface AdminSemester {
+  id: number;
+  academic_session_id: number;
+  number: number;
+  starts_on: string;
+  ends_on: string;
+}
+
+export interface AdminUserItem {
+  id: number;
+  email: string;
+  full_name: string;
+  is_active: boolean;
+  is_superuser: boolean;
+  role_id: number | null;
+  role_name: string | null;
+  permissions: string[];
+  created_at: string;
+}
+
+export interface RoleItem {
+  id: number;
+  name: string;
+  description: string | null;
 }
 
 export interface AdminFaculty {
@@ -274,18 +321,58 @@ export const adminService = {
     URL.revokeObjectURL(url);
   },
 
+  // Academic Sessions & Semesters
+  async listSessions(): Promise<AdminAcademicSession[]> {
+    return apiRequest<AdminAcademicSession[]>('/admin/academic/sessions');
+  },
+  async createSession(data: { name: string; starts_on: string; ends_on: string; is_active?: boolean }): Promise<AdminAcademicSession> {
+    return apiRequest<AdminAcademicSession>('/admin/academic/sessions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  async updateSession(id: number, data: Partial<AdminAcademicSession>): Promise<AdminAcademicSession> {
+    return apiRequest<AdminAcademicSession>(`/admin/academic/sessions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+  async listSemesters(sessionId?: number): Promise<AdminSemester[]> {
+    const q = sessionId ? `?session_id=${sessionId}` : '';
+    return apiRequest<AdminSemester[]>(`/admin/academic/semesters${q}`);
+  },
+  async createSemester(data: { academic_session_id: number; number: number; starts_on: string; ends_on: string }): Promise<AdminSemester> {
+    return apiRequest<AdminSemester>('/admin/academic/semesters', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  async updateSemester(id: number, data: Partial<AdminSemester>): Promise<AdminSemester> {
+    return apiRequest<AdminSemester>(`/admin/academic/semesters/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
   // Packages
   async listPackages(): Promise<AdminSubscriptionPackage[]> {
     return apiRequest<AdminSubscriptionPackage[]>('/admin/subscriptions/packages');
   },
   async createPackage(data: {
     name: string;
-    description?: string;
+    description?: string | null;
+    package_type: string;
     price_minor: number;
+    subscriber_price_minor?: number | null;
     currency: string;
-    semester_id: number;
-    available_from?: string;
-    available_until?: string;
+    semester_id?: number | null;
+    academic_session_id?: number | null;
+    academic_level_id?: number | null;
+    course_id?: number | null;
+    resource_id?: number | null;
+    available_from?: string | null;
+    available_until?: string | null;
+    is_active?: boolean;
   }): Promise<AdminSubscriptionPackage> {
     return apiRequest<AdminSubscriptionPackage>('/admin/subscriptions/packages', {
       method: 'POST',
@@ -294,14 +381,48 @@ export const adminService = {
   },
   async updatePackage(id: number, data: {
     name?: string;
-    description?: string;
+    description?: string | null;
+    package_type?: string;
     price_minor?: number;
+    subscriber_price_minor?: number | null;
+    semester_id?: number | null;
+    academic_session_id?: number | null;
+    academic_level_id?: number | null;
+    course_id?: number | null;
+    resource_id?: number | null;
+    available_from?: string | null;
+    available_until?: string | null;
     is_active?: boolean;
   }): Promise<AdminSubscriptionPackage> {
     return apiRequest<AdminSubscriptionPackage>(`/admin/subscriptions/packages/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
+  },
+  async deletePackage(id: number): Promise<{ message: string }> {
+    return apiRequest<{ message: string }>(`/admin/subscriptions/packages/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // Users & Roles Management
+  async listAdminUsers(): Promise<AdminUserItem[]> {
+    return apiRequest<AdminUserItem[]>('/admin/users');
+  },
+  async createAdminUser(data: { email: string; full_name: string; password?: string; role_name: string }): Promise<AdminUserItem> {
+    return apiRequest<AdminUserItem>('/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  async updateAdminUserRole(userId: number, roleName: string): Promise<AdminUserItem> {
+    return apiRequest<AdminUserItem>(`/admin/users/${userId}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role_name: roleName }),
+    });
+  },
+  async listRoles(): Promise<RoleItem[]> {
+    return apiRequest<RoleItem[]>('/admin/roles');
   },
 
   // Payments & Subscriptions

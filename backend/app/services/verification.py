@@ -83,21 +83,23 @@ def _check_identity_conflict(
         raise ConflictError("The student identifier is already associated with another account.")
 
 
-def register_student(db: Session, data: StudentRegistration) -> tuple[User, VerificationSubmission]:
+def register_student(db: Session, data: StudentRegistration) -> tuple[User, VerificationSubmission | None]:
     email = str(data.email).strip().lower()
     jamb_number = _clean_identifier(data.jamb_registration_number)
     matric_number = _clean_identifier(data.matriculation_number)
 
     if db.scalar(select(User.id).where(User.email == email)) is not None:
         raise ConflictError("An account already exists for this email address.")
-    _validate_academic_references(
-        db,
-        data.programme_id,
-        data.department_id,
-        data.admission_session_id,
-        data.claimed_level_id,
-    )
-    _check_identity_conflict(db, None, jamb_number, matric_number)
+    if data.programme_id or data.department_id or data.admission_session_id or data.claimed_level_id:
+        _validate_academic_references(
+            db,
+            data.programme_id,
+            data.department_id,
+            data.admission_session_id,
+            data.claimed_level_id,
+        )
+    if jamb_number or matric_number:
+        _check_identity_conflict(db, None, jamb_number, matric_number)
 
     from app.core.security import hash_password
 
@@ -105,39 +107,44 @@ def register_student(db: Session, data: StudentRegistration) -> tuple[User, Veri
     try:
         db.add(user)
         db.flush()
-        profile = StudentAcademicProfile(
-            user_id=user.id,
-            jamb_registration_number=jamb_number,
-            matriculation_number=matric_number,
-            programme_id=data.programme_id,
-            department_id=data.department_id,
-            admission_session_id=data.admission_session_id,
-        )
-        submission = VerificationSubmission(
-            user_id=user.id,
-            status="pending",
-            verification_method="manual",
-            jamb_registration_number=jamb_number,
-            matriculation_number=matric_number,
-            programme_id=data.programme_id,
-            department_id=data.department_id,
-            admission_session_id=data.admission_session_id,
-            claimed_level_id=data.claimed_level_id,
-        )
-        db.add_all([profile, submission])
-        db.flush()
-        db.add(
-            AuditEvent(
-                actor_user_id=user.id,
-                action="student.verification_submitted",
-                target_type="verification_submission",
-                target_id=str(submission.id),
-                event_metadata={"status": "pending", "verification_method": "manual"},
+
+        profile = None
+        submission = None
+        if jamb_number or matric_number:
+            profile = StudentAcademicProfile(
+                user_id=user.id,
+                jamb_registration_number=jamb_number,
+                matriculation_number=matric_number,
+                programme_id=data.programme_id,
+                department_id=data.department_id,
+                admission_session_id=data.admission_session_id,
             )
-        )
+            submission = VerificationSubmission(
+                user_id=user.id,
+                status="pending",
+                verification_method="manual",
+                jamb_registration_number=jamb_number,
+                matriculation_number=matric_number,
+                programme_id=data.programme_id,
+                department_id=data.department_id,
+                admission_session_id=data.admission_session_id,
+                claimed_level_id=data.claimed_level_id,
+            )
+            db.add_all([profile, submission])
+            db.flush()
+            db.add(
+                AuditEvent(
+                    actor_user_id=user.id,
+                    action="student.verification_submitted",
+                    target_type="verification_submission",
+                    target_id=str(submission.id),
+                    event_metadata={"status": "pending", "verification_method": "manual"},
+                )
+            )
         db.commit()
         db.refresh(user)
-        db.refresh(submission)
+        if submission is not None:
+            db.refresh(submission)
         return user, submission
     except IntegrityError as exc:
         db.rollback()
@@ -149,12 +156,6 @@ def submit_verification(
     user: User,
     data: VerificationSubmissionCreate,
 ) -> VerificationSubmission:
-    profile = db.scalar(
-        select(StudentAcademicProfile).where(StudentAcademicProfile.user_id == user.id)
-    )
-    if profile is None:
-        raise PolicyError("The student academic profile is not available.")
-
     jamb_number = _clean_identifier(data.jamb_registration_number)
     matric_number = _clean_identifier(data.matriculation_number)
     if not jamb_number and not matric_number:
@@ -168,6 +169,31 @@ def submit_verification(
         data.claimed_level_id,
     )
     _check_identity_conflict(db, user.id, jamb_number, matric_number)
+
+    profile = db.scalar(
+        select(StudentAcademicProfile).where(StudentAcademicProfile.user_id == user.id)
+    )
+    if profile is None:
+        profile = StudentAcademicProfile(
+            user_id=user.id,
+            jamb_registration_number=jamb_number,
+            matriculation_number=matric_number,
+            programme_id=data.programme_id,
+            department_id=data.department_id,
+            admission_session_id=data.admission_session_id,
+        )
+        db.add(profile)
+    else:
+        if jamb_number:
+            profile.jamb_registration_number = jamb_number
+        if matric_number:
+            profile.matriculation_number = matric_number
+        if data.programme_id:
+            profile.programme_id = data.programme_id
+        if data.department_id:
+            profile.department_id = data.department_id
+        if data.admission_session_id:
+            profile.admission_session_id = data.admission_session_id
 
     submission = VerificationSubmission(
         user_id=user.id,
@@ -242,7 +268,13 @@ def review_verification(
             )
         )
         if profile is None:
-            raise PolicyError("The student academic profile is not available.")
+            profile = StudentAcademicProfile(
+                user_id=submission.user_id,
+                jamb_registration_number=_clean_identifier(submission.jamb_registration_number),
+                matriculation_number=_clean_identifier(submission.matriculation_number),
+            )
+            db.add(profile)
+            db.flush()
         profile.jamb_registration_number = _clean_identifier(submission.jamb_registration_number)
         profile.matriculation_number = _clean_identifier(submission.matriculation_number)
         profile.programme_id = submission.programme_id

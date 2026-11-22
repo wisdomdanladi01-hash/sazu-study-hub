@@ -1,11 +1,12 @@
 import json
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_admin, get_current_user
+from app.api.dependencies import get_current_admin, get_current_user, get_optional_user, require_capability
 from app.db.database import get_db
 from app.models.academic import Semester
 from app.models.commerce import AccessPackage, Payment
@@ -24,7 +25,11 @@ from app.schemas.payments import (
 from app.services.errors import ConflictError, NotFoundError, PolicyError
 from app.services.payments import (
     PaymentRejected,
+    _user_has_any_active_subscription,
     create_subscription_package,
+    delete_subscription_package,
+    get_package_metrics,
+    get_package_target_name,
     get_payment_history,
     get_subscription_package,
     get_user_subscriptions,
@@ -79,21 +84,35 @@ def _subscription_response(subscription: Subscription) -> SubscriptionResponse:
 
 
 def _package_response(
-    package: AccessPackage, semester: Semester | None = None
+    package: AccessPackage,
+    semester: Semester | None = None,
+    target_name: str | None = None,
+    buyers_count: int = 0,
+    total_revenue_minor: int = 0,
+    effective_price_minor: int | None = None,
 ) -> SubscriptionPackageResponse:
     return SubscriptionPackageResponse(
         id=package.id,
         name=package.name,
         description=package.description,
-        package_type="subscription",
+        package_type=package.package_type,
         price_minor=package.price_minor,
+        subscriber_price_minor=package.subscriber_price_minor,
+        effective_price_minor=effective_price_minor if effective_price_minor is not None else package.price_minor,
         currency=package.currency,
         semester_id=package.semester_id,
+        academic_session_id=package.academic_session_id,
+        academic_level_id=package.academic_level_id,
+        course_id=package.course_id,
+        resource_id=package.resource_id,
+        target_name=target_name,
         semester_starts_on=semester.starts_on if semester else None,
         semester_ends_on=semester.ends_on if semester else None,
         available_from=package.available_from,
         available_until=package.available_until,
         is_active=package.is_active,
+        buyers_count=buyers_count,
+        total_revenue_minor=total_revenue_minor,
     )
 
 
@@ -109,35 +128,55 @@ def _raise_service_error(exc: Exception) -> None:
     raise exc
 
 
-def _is_admin(db: Session, user: User) -> bool:
-    return user.is_superuser or db.scalar(
-        select(Role.id).where(Role.id == user.role_id, Role.name == "admin")
-    ) is not None
-
-
 @router.get(
     "/subscriptions/packages", response_model=list[SubscriptionPackageResponse]
 )
 def available_subscription_packages(
-    _user: User = Depends(get_current_user),
+    user: User | None = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ) -> list[SubscriptionPackageResponse]:
-    return [
-        _package_response(package, semester)
-        for package, semester in list_subscription_packages(db)
-    ]
+    now = datetime.now(timezone.utc)
+    is_active_sub = _user_has_any_active_subscription(db, user.id, now) if user else False
+    results = []
+    for package, semester, target_name, buyers, rev in list_subscription_packages(db):
+        eff_price = (
+            package.subscriber_price_minor
+            if (is_active_sub and package.subscriber_price_minor is not None)
+            else package.price_minor
+        )
+        results.append(
+            _package_response(
+                package,
+                semester,
+                target_name,
+                buyers,
+                rev,
+                effective_price_minor=eff_price,
+            )
+        )
+    return results
+
+
+@router.get(
+    "/subscriptions/plans", response_model=list[SubscriptionPackageResponse], include_in_schema=False
+)
+def available_subscription_plans(
+    user: User | None = Depends(get_optional_user),
+    db: Session = Depends(get_db),
+) -> list[SubscriptionPackageResponse]:
+    return available_subscription_packages(user, db)
 
 
 @admin_router.get(
     "/subscriptions/packages", response_model=list[SubscriptionPackageResponse]
 )
 def admin_subscription_packages(
-    _admin: User = Depends(get_current_admin),
+    _admin: User = Depends(require_capability("manage_packages")),
     db: Session = Depends(get_db),
 ) -> list[SubscriptionPackageResponse]:
     return [
-        _package_response(package, semester)
-        for package, semester in list_subscription_packages(db, include_inactive=True)
+        _package_response(package, semester, target_name, buyers, rev)
+        for package, semester, target_name, buyers, rev in list_subscription_packages(db, include_inactive=True)
     ]
 
 
@@ -148,15 +187,17 @@ def admin_subscription_packages(
 )
 def add_subscription_package(
     data: SubscriptionPackageCreate,
-    admin: User = Depends(get_current_admin),
+    admin: User = Depends(require_capability("manage_packages")),
     db: Session = Depends(get_db),
 ) -> SubscriptionPackageResponse:
     try:
         package = create_subscription_package(db, admin, **data.model_dump())
     except (ConflictError, PolicyError) as exc:
         _raise_service_error(exc)
-    semester = db.get(Semester, package.semester_id)
-    return _package_response(package, semester)
+    semester = db.get(Semester, package.semester_id) if package.semester_id else None
+    target_name = get_package_target_name(db, package)
+    buyers, rev = get_package_metrics(db, package.id)
+    return _package_response(package, semester, target_name, buyers, rev)
 
 
 @admin_router.patch(
@@ -166,7 +207,7 @@ def add_subscription_package(
 def edit_subscription_package(
     package_id: int,
     data: SubscriptionPackageUpdate,
-    admin: User = Depends(get_current_admin),
+    admin: User = Depends(require_capability("manage_packages")),
     db: Session = Depends(get_db),
 ) -> SubscriptionPackageResponse:
     try:
@@ -176,7 +217,27 @@ def edit_subscription_package(
         )
     except (ConflictError, NotFoundError, PolicyError) as exc:
         _raise_service_error(exc)
-    return _package_response(package, db.get(Semester, package.semester_id))
+    semester = db.get(Semester, package.semester_id) if package.semester_id else None
+    target_name = get_package_target_name(db, package)
+    buyers, rev = get_package_metrics(db, package.id)
+    return _package_response(package, semester, target_name, buyers, rev)
+
+
+@admin_router.delete(
+    "/subscriptions/packages/{package_id}",
+    status_code=status.HTTP_200_OK,
+)
+def remove_subscription_package(
+    package_id: int,
+    admin: User = Depends(require_capability("manage_packages")),
+    db: Session = Depends(get_db),
+):
+    try:
+        package = get_subscription_package(db, package_id)
+        delete_subscription_package(db, admin, package)
+    except (ConflictError, NotFoundError, PolicyError) as exc:
+        _raise_service_error(exc)
+    return {"message": f"Package '{package.name}' deleted or deactivated successfully."}
 
 
 @router.post(
@@ -210,6 +271,20 @@ def initialize_subscription_payment(
         currency=payment.currency,
         checkout_url=payment.checkout_url,
     )
+
+
+@router.post(
+    "/payments/initiate",
+    response_model=PaymentInitializeResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
+)
+def initiate_subscription_payment(
+    data: PaymentInitializeRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PaymentInitializeResponse:
+    return initialize_subscription_payment(data, user, db)
 
 
 @router.post(
@@ -273,7 +348,7 @@ def own_subscriptions(
 def admin_payment_history(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
-    _admin: User = Depends(get_current_admin),
+    _admin: User = Depends(require_capability("view_payments")),
     db: Session = Depends(get_db),
 ) -> list[PaymentResponse]:
     return [
@@ -288,7 +363,7 @@ def admin_payment_history(
 def admin_subscription_history(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
-    _admin: User = Depends(get_current_admin),
+    _admin: User = Depends(require_capability("view_payments")),
     db: Session = Depends(get_db),
 ) -> list[SubscriptionResponse]:
     subscriptions = db.scalars(

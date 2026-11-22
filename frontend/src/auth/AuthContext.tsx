@@ -8,8 +8,11 @@ interface ApiUser {
   email: string;
   full_name: string;
   is_active: boolean;
+  email_verified?: boolean;
   is_admin?: boolean;
   role?: string;
+  permissions?: string[];
+  is_superuser?: boolean;
 }
 
 interface ApiDashboard {
@@ -49,6 +52,8 @@ interface AuthContextValue extends AuthState {
   signOut: () => void;
   refreshProfile: () => Promise<void>;
   updateProfile: (patch: Partial<Pick<StudentProfile, 'fullName' | 'email'>>) => Promise<void>;
+  sendEmailVerificationCode: () => Promise<{ ok: boolean; error?: string; devCode?: string }>;
+  verifyEmailCode: (code: string) => Promise<{ ok: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -71,8 +76,11 @@ function mapProfile(user: ApiUser, dashboard: ApiDashboard): StudentProfile {
     },
     hasSubscription: Boolean(subscription?.is_active),
     subscriptionExpiresAt: subscription?.is_active ? subscription.ends_at : null,
-    isAdmin: Boolean(user.is_admin),
+    isAdmin: Boolean(user.is_admin || user.is_superuser),
     role: user.role,
+    permissions: user.permissions || [],
+    isSuperuser: Boolean(user.is_superuser),
+    emailVerified: Boolean(user.email_verified),
   };
 }
 
@@ -202,10 +210,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             fullName: updated.full_name,
             isAdmin: Boolean(updated.is_admin),
             role: updated.role,
+            emailVerified: Boolean(updated.email_verified),
           }
         : current.profile,
     }));
   }, [state.profile, state.token]);
+
+  const sendEmailVerificationCode = useCallback(async () => {
+    try {
+      const res = await apiRequest<{ message: string; dev_code?: string }>('/auth/email/send-code', {
+        method: 'POST',
+      });
+      return { ok: true, devCode: res.dev_code };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : 'Unable to send verification code.' };
+    }
+  }, []);
+
+  const verifyEmailCode = useCallback(async (code: string) => {
+    try {
+      await apiRequest<ApiUser>('/auth/email/verify', {
+        method: 'POST',
+        body: JSON.stringify({ code: code.trim() }),
+      });
+      await refreshProfile();
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : 'Invalid verification code.' };
+    }
+  }, [refreshProfile]);
 
   const value = useMemo<AuthContextValue>(() => ({
     ...state,
@@ -216,7 +249,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signOut,
     refreshProfile,
     updateProfile,
-  }), [state, signIn, register, signOut, refreshProfile, updateProfile]);
+    sendEmailVerificationCode,
+    verifyEmailCode,
+  }), [state, signIn, register, signOut, refreshProfile, updateProfile, sendEmailVerificationCode, verifyEmailCode]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

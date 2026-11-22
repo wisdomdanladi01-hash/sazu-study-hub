@@ -25,7 +25,7 @@ from app.models.academic import (
     StudentAcademicProfile,
 )
 from app.models.audit import AuditEvent
-from app.models.commerce import Entitlement, PackageCourse, PackageResource, Payment
+from app.models.commerce import AccessPackage, Entitlement, PackageCourse, PackageResource, Payment
 from app.models.resource import (
     Resource,
     ResourceCategory,
@@ -465,12 +465,29 @@ def find_paid_entitlement(
                 PackageResource.resource_id == resource_id,
             )
         )
+        res_obj = db.get(Resource, resource_id)
+        if res_obj and res_obj.academic_level_id:
+            conditions.append(
+                exists().where(
+                    AccessPackage.id == Entitlement.package_id,
+                    AccessPackage.package_type == "level",
+                    AccessPackage.academic_level_id == res_obj.academic_level_id,
+                )
+            )
     if course_id is not None:
         conditions.append(Entitlement.course_id == course_id)
         conditions.append(
             exists().where(
                 PackageCourse.package_id == Entitlement.package_id,
                 PackageCourse.course_id == course_id,
+            )
+        )
+        conditions.append(
+            exists().where(
+                AccessPackage.id == Entitlement.package_id,
+                AccessPackage.package_type == "level",
+                CourseOffering.course_id == course_id,
+                CourseOffering.academic_level_id == AccessPackage.academic_level_id,
             )
         )
     if semester_id is not None:

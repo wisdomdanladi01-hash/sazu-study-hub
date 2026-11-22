@@ -4,6 +4,7 @@ import { catalogService } from '@/services/catalog';
 import { useAuth } from '@/auth/AuthContext';
 import { useRecentlyViewed } from '@/hooks/useRecentlyViewed';
 import { API_BASE_URL, ApiError } from '@/services/api';
+import { paymentService, type SubscriptionPackage } from '@/services/payments';
 import type { CatalogResource } from '@/services/catalog';
 import type { ResourcePreview } from '@/types';
 import { Card } from '@/components/ui/Card';
@@ -45,6 +46,22 @@ export function ResourceDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [downloadError] = useState<string | null>(null);
   const [copiedExcerpt, setCopiedExcerpt] = useState(false);
+  const [packages, setPackages] = useState<SubscriptionPackage[]>([]);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+
+  useEffect(() => {
+    paymentService.listPackages().then(setPackages).catch(() => { });
+  }, []);
+
+  const unlockingPlans = packages.filter((p) => {
+    if (!resource) return false;
+    if (p.package_type === 'resource' && p.resource_id === Number(resource.id)) return true;
+    if (p.package_type === 'course' && p.course_id === Number(resource.course.id)) return true;
+    if (p.package_type === 'semester' || p.package_type === 'subscription' || p.package_type === 'session') return true;
+    return false;
+  }).sort((a, b) => a.price_minor - b.price_minor);
+
+  const cheapestPlan = unlockingPlans[0] ?? null;
 
   useEffect(() => {
     if (!id) return;
@@ -334,6 +351,19 @@ export function ResourceDetailPage() {
         <span className="truncate text-ink-700">{resource.course.code}</span>
       </nav>
 
+      {/* Draft banner for Admin */}
+      {!resource.is_published && profile?.isAdmin && (
+        <div className="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-center gap-3">
+          <Lock className="h-5 w-5 text-amber-700 shrink-0" />
+          <div>
+            <p className="font-bold text-sm">Draft — not visible to students (Admin preview mode)</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              This learning material has not been published. As an administrator, you are inspecting this draft in student preview mode.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="grid lg:grid-cols-[1fr_320px] gap-6">
         <div>
           <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -439,30 +469,50 @@ export function ResourceDetailPage() {
             )}
           </Card>
 
-          {/* Micro-access: Single Material & Practice Pass */}
-          {(!profile || !profile.hasSubscription) && (
+          {/* Micro-access: Cheapest available pass to unlock this material */}
+          {(!profile || !profile.hasSubscription) && cheapestPlan && (
             <Card className="p-5 border-teal-200/90 bg-gradient-to-br from-teal-50/70 via-white to-white shadow-xs">
               <div className="flex items-center gap-2 mb-2">
                 <Sparkles className="h-4 w-4 text-teal-700" />
                 <h4 className="font-display font-bold text-ink-950 text-sm">
-                  Single Material & Practice Pass
+                  {cheapestPlan.name}
                 </h4>
               </div>
               <p className="text-xs text-ink-600 leading-relaxed">
-                Need only this document? Pay <span className="font-bold text-ink-900">₦300</span> to download this material and immediately open all related practice test questions for <span className="font-semibold text-ink-900">{resource.course.code}</span>.
+                Unlock this document and sit related practice test questions with this plan for{' '}
+                <span className="font-bold text-ink-900">
+                  ₦{(cheapestPlan.price_minor / 100).toLocaleString()}
+                </span>.
               </p>
               <div className="mt-4 space-y-2">
-                <Link to="/pricing">
-                  <Button fullWidth size="sm" className="font-semibold shadow-xs">
-                    Unlock Material (₦300)
-                  </Button>
-                </Link>
+                <Button
+                  fullWidth
+                  size="sm"
+                  className="font-semibold shadow-xs"
+                  loading={checkoutLoading}
+                  onClick={async () => {
+                    if (!profile) {
+                      navigate(`/login?redirect=${encodeURIComponent(`/materials/${resource.id}`)}`);
+                      return;
+                    }
+                    setCheckoutLoading(true);
+                    try {
+                      const res = await paymentService.initializePayment(cheapestPlan.id);
+                      window.location.assign(res.checkout_url);
+                    } catch (err) {
+                      alert(err instanceof Error ? err.message : 'Unable to initiate checkout');
+                      setCheckoutLoading(false);
+                    }
+                  }}
+                >
+                  Unlock Now (₦{(cheapestPlan.price_minor / 100).toLocaleString()})
+                </Button>
                 <div className="text-center pt-1">
                   <Link
                     to="/pricing"
                     className="text-[11px] font-semibold text-teal-700 hover:text-teal-900 hover:underline"
                   >
-                    Or get full semester access for ₦1,500 &rarr;
+                    View all access passes &rarr;
                   </Link>
                 </div>
               </div>
@@ -484,8 +534,8 @@ export function ResourceDetailPage() {
                   preview?.preview_available
                     ? `${preview.preview_type === 'text' ? 'Text Excerpt' : preview.preview_type === 'image' ? 'Sample Image' : 'PDF Sample'}`
                     : previewAuthRequired
-                    ? 'Requires sign-in'
-                    : 'Not published'
+                      ? 'Requires sign-in'
+                      : 'Not published'
                 }
               />
             </dl>

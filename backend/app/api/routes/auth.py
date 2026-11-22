@@ -1,31 +1,50 @@
 import logging
+import os
+import secrets
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import (
+    ROLE_CAPABILITIES,
+    get_current_admin,
+    get_current_user,
+    get_user_capabilities,
+    require_capability,
+)
 from app.core.security import (
     burn_password_check,
     create_access_token,
+    hash_password,
     require_jwt_secret,
     verify_password,
 )
 from app.core.rate_limit import enforce_auth_rate_limit
 from app.db.database import get_db
+from app.models.audit import AuditEvent
 from app.models.user import Role, User
 from app.schemas.auth import (
     AccessTokenResponse,
+    AdminRoleUpdate,
+    AdminUserCreate,
+    AdminUserResponse,
+    EmailVerificationCodeRequest,
+    EmailVerificationSendResponse,
     LoginRequest,
+    RoleResponse,
     StudentRegistration,
     UserProfileUpdate,
     UserResponse,
 )
+from app.services.email import send_email_otp
 from app.services.errors import ConflictError, PolicyError
 from app.services.verification import register_student
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
+admin_router = APIRouter(prefix="/admin", tags=["admin management"])
 logger = logging.getLogger(__name__)
 
 
@@ -38,14 +57,18 @@ def _auth_unavailable() -> HTTPException:
 
 def _user_response(user: User, db: Session) -> UserResponse:
     role_name = db.scalar(select(Role.name).where(Role.id == user.role_id)) if user.role_id else None
-    is_admin = bool(user.is_superuser or role_name == "admin")
+    caps = sorted(get_user_capabilities(user, db))
+    is_admin = bool(user.is_superuser or (role_name and role_name in ROLE_CAPABILITIES))
     return UserResponse(
         id=user.id,
         email=user.email,
         full_name=user.full_name,
         is_active=user.is_active,
         is_admin=is_admin,
+        is_superuser=user.is_superuser,
         role=role_name or ("admin" if is_admin else "student"),
+        email_verified=bool(getattr(user, "email_verified", False)),
+        permissions=caps,
     )
 
 
@@ -119,6 +142,217 @@ def read_current_user(
     return _user_response(user, db)
 
 
+@router.post("/email/send-code", response_model=EmailVerificationSendResponse)
+def send_email_verification_code(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> EmailVerificationSendResponse:
+    """Generate and dispatch a 6-digit email verification OTP."""
+    code = f"{secrets.randbelow(900000) + 100000}"
+    user.email_verification_code = code
+    user.email_verification_expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+    db.commit()
+
+    send_email_otp(user.email, user.full_name, code)
+    dev_mode = not (os.getenv("SMTP_HOST") and os.getenv("SMTP_USER"))
+
+    return EmailVerificationSendResponse(
+        message=f"A 6-digit verification code has been sent to {user.email}.",
+        email=user.email,
+        expires_in_minutes=15,
+        dev_code=code if dev_mode else None,
+    )
+
+
+@router.post("/email/verify", response_model=UserResponse)
+def verify_email_code(
+    data: EmailVerificationCodeRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserResponse:
+    """Verify the 6-digit email OTP and mark the user's email as confirmed."""
+    now = datetime.now(timezone.utc)
+    if (
+        not user.email_verification_code
+        or not user.email_verification_expires_at
+        or user.email_verification_expires_at <= now
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The verification code has expired or was not requested. Please request a new code.",
+        )
+
+    if user.email_verification_code.strip() != data.code.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid verification code. Please check and try again.",
+        )
+
+    user.email_verified = True
+    user.email_verification_code = None
+    user.email_verification_expires_at = None
+
+    db.add(
+        AuditEvent(
+            actor_user_id=user.id,
+            action="user.email_verified",
+            target_type="user",
+            target_id=str(user.id),
+            event_metadata={"email": user.email},
+        )
+    )
+    db.commit()
+    db.refresh(user)
+
+    return _user_response(user, db)
+
+
+# Admin User & Role Management (Super Admin only for role assignments)
+
+@admin_router.get("/roles", response_model=list[RoleResponse])
+def list_admin_roles(
+    _admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> list[RoleResponse]:
+    roles = db.scalars(select(Role).order_by(Role.id)).all()
+    return [RoleResponse(id=r.id, name=r.name, description=r.description) for r in roles]
+
+
+@admin_router.get("/users", response_model=list[AdminUserResponse])
+def list_admin_users(
+    _admin: User = Depends(require_capability("manage_admins")),
+    db: Session = Depends(get_db),
+) -> list[AdminUserResponse]:
+    users = db.scalars(
+        select(User)
+        .where((User.is_superuser.is_(True)) | (User.role_id.is_not(None)))
+        .order_by(User.id)
+    ).all()
+    results = []
+    for u in users:
+        role_name = db.scalar(select(Role.name).where(Role.id == u.role_id)) if u.role_id else None
+        caps = sorted(get_user_capabilities(u, db))
+        results.append(
+            AdminUserResponse(
+                id=u.id,
+                email=u.email,
+                full_name=u.full_name,
+                is_active=u.is_active,
+                is_superuser=u.is_superuser,
+                role=role_name or ("super_admin" if u.is_superuser else None),
+                permissions=caps,
+                created_at=u.created_at.isoformat(),
+            )
+        )
+    return results
+
+
+@admin_router.post("/users", response_model=AdminUserResponse, status_code=status.HTTP_201_CREATED)
+def create_admin_user(
+    data: AdminUserCreate,
+    admin: User = Depends(require_capability("manage_admins")),
+    db: Session = Depends(get_db),
+) -> AdminUserResponse:
+    email = data.email.strip().lower()
+    existing = db.scalar(select(User.id).where(User.email == email))
+    if existing is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account already exists for this email address.",
+        )
+    role = db.scalar(select(Role).where(Role.name == data.role_name))
+    if not role and not data.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Role '{data.role_name}' does not exist.",
+        )
+    new_user = User(
+        email=email,
+        full_name=data.full_name.strip(),
+        password_hash=hash_password(data.password),
+        is_active=True,
+        is_superuser=data.is_superuser,
+        role_id=role.id if role else None,
+    )
+    db.add(new_user)
+    db.flush()
+    db.add(
+        AuditEvent(
+            actor_user_id=admin.id,
+            action="admin.admin_account_created",
+            target_type="user",
+            target_id=str(new_user.id),
+            event_metadata={"role": data.role_name, "is_superuser": data.is_superuser},
+        )
+    )
+    db.commit()
+    db.refresh(new_user)
+    caps = sorted(get_user_capabilities(new_user, db))
+    return AdminUserResponse(
+        id=new_user.id,
+        email=new_user.email,
+        full_name=new_user.full_name,
+        is_active=new_user.is_active,
+        is_superuser=new_user.is_superuser,
+        role=data.role_name if role else ("super_admin" if new_user.is_superuser else None),
+        permissions=caps,
+        created_at=new_user.created_at.isoformat(),
+    )
+
+
+@admin_router.patch("/users/{user_id}/role", response_model=AdminUserResponse)
+def update_admin_user_role(
+    user_id: int,
+    data: AdminRoleUpdate,
+    admin: User = Depends(require_capability("manage_admins")),
+    db: Session = Depends(get_db),
+) -> AdminUserResponse:
+    target_user = db.get(User, user_id)
+    if not target_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    if data.role_name is not None:
+        role = db.scalar(select(Role).where(Role.name == data.role_name))
+        if not role:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Role '{data.role_name}' does not exist.",
+            )
+        target_user.role_id = role.id
+    if data.is_superuser is not None:
+        target_user.is_superuser = data.is_superuser
+    if data.is_active is not None:
+        target_user.is_active = data.is_active
+
+    db.add(
+        AuditEvent(
+            actor_user_id=admin.id,
+            action="admin.role_assigned",
+            target_type="user",
+            target_id=str(target_user.id),
+            event_metadata={
+                "role": data.role_name,
+                "is_superuser": data.is_superuser,
+                "is_active": data.is_active,
+            },
+        )
+    )
+    db.commit()
+    db.refresh(target_user)
+    role_name = db.scalar(select(Role.name).where(Role.id == target_user.role_id)) if target_user.role_id else None
+    caps = sorted(get_user_capabilities(target_user, db))
+    return AdminUserResponse(
+        id=target_user.id,
+        email=target_user.email,
+        full_name=target_user.full_name,
+        is_active=target_user.is_active,
+        is_superuser=target_user.is_superuser,
+        role=role_name or ("super_admin" if target_user.is_superuser else None),
+        permissions=caps,
+        created_at=target_user.created_at.isoformat(),
+    )
+
+
+
 @router.patch("/me", response_model=UserResponse)
 def update_current_user(
     data: UserProfileUpdate,
@@ -146,3 +380,149 @@ def update_current_user(
             detail="Profile update is temporarily unavailable.",
         ) from exc
     return _user_response(user, db)
+
+
+# Admin User & Role Management (Super Admin only for role assignments)
+
+@admin_router.get("/roles", response_model=list[RoleResponse])
+def list_admin_roles(
+    _admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> list[RoleResponse]:
+    roles = db.scalars(select(Role).order_by(Role.id)).all()
+    return [RoleResponse(id=r.id, name=r.name, description=r.description) for r in roles]
+
+
+@admin_router.get("/users", response_model=list[AdminUserResponse])
+def list_admin_users(
+    _admin: User = Depends(require_capability("manage_admins")),
+    db: Session = Depends(get_db),
+) -> list[AdminUserResponse]:
+    users = db.scalars(
+        select(User)
+        .where((User.is_superuser.is_(True)) | (User.role_id.is_not(None)))
+        .order_by(User.id)
+    ).all()
+    results = []
+    for u in users:
+        role_name = db.scalar(select(Role.name).where(Role.id == u.role_id)) if u.role_id else None
+        caps = sorted(get_user_capabilities(u, db))
+        results.append(
+            AdminUserResponse(
+                id=u.id,
+                email=u.email,
+                full_name=u.full_name,
+                is_active=u.is_active,
+                is_superuser=u.is_superuser,
+                role=role_name or ("super_admin" if u.is_superuser else None),
+                permissions=caps,
+                created_at=u.created_at.isoformat(),
+            )
+        )
+    return results
+
+
+@admin_router.post("/users", response_model=AdminUserResponse, status_code=status.HTTP_201_CREATED)
+def create_admin_user(
+    data: AdminUserCreate,
+    admin: User = Depends(require_capability("manage_admins")),
+    db: Session = Depends(get_db),
+) -> AdminUserResponse:
+    email = data.email.strip().lower()
+    existing = db.scalar(select(User.id).where(User.email == email))
+    if existing is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account already exists for this email address.",
+        )
+    role = db.scalar(select(Role).where(Role.name == data.role_name))
+    if not role and not data.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Role '{data.role_name}' does not exist.",
+        )
+    new_user = User(
+        email=email,
+        full_name=data.full_name.strip(),
+        password_hash=hash_password(data.password),
+        is_active=True,
+        is_superuser=data.is_superuser,
+        role_id=role.id if role else None,
+    )
+    db.add(new_user)
+    db.flush()
+    db.add(
+        AuditEvent(
+            actor_user_id=admin.id,
+            action="admin.admin_account_created",
+            target_type="user",
+            target_id=str(new_user.id),
+            event_metadata={"role": data.role_name, "is_superuser": data.is_superuser},
+        )
+    )
+    db.commit()
+    db.refresh(new_user)
+    caps = sorted(get_user_capabilities(new_user, db))
+    return AdminUserResponse(
+        id=new_user.id,
+        email=new_user.email,
+        full_name=new_user.full_name,
+        is_active=new_user.is_active,
+        is_superuser=new_user.is_superuser,
+        role=data.role_name if role else ("super_admin" if new_user.is_superuser else None),
+        permissions=caps,
+        created_at=new_user.created_at.isoformat(),
+    )
+
+
+@admin_router.patch("/users/{user_id}/role", response_model=AdminUserResponse)
+def update_admin_user_role(
+    user_id: int,
+    data: AdminRoleUpdate,
+    admin: User = Depends(require_capability("manage_admins")),
+    db: Session = Depends(get_db),
+) -> AdminUserResponse:
+    target_user = db.get(User, user_id)
+    if not target_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    if data.role_name is not None:
+        role = db.scalar(select(Role).where(Role.name == data.role_name))
+        if not role:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Role '{data.role_name}' does not exist.",
+            )
+        target_user.role_id = role.id
+    if data.is_superuser is not None:
+        target_user.is_superuser = data.is_superuser
+    if data.is_active is not None:
+        target_user.is_active = data.is_active
+
+    db.add(
+        AuditEvent(
+            actor_user_id=admin.id,
+            action="admin.role_assigned",
+            target_type="user",
+            target_id=str(target_user.id),
+            event_metadata={
+                "role": data.role_name,
+                "is_superuser": data.is_superuser,
+                "is_active": data.is_active,
+            },
+        )
+    )
+    db.commit()
+    db.refresh(target_user)
+    role_name = db.scalar(select(Role.name).where(Role.id == target_user.role_id)) if target_user.role_id else None
+    caps = sorted(get_user_capabilities(target_user, db))
+    return AdminUserResponse(
+        id=target_user.id,
+        email=target_user.email,
+        full_name=target_user.full_name,
+        is_active=target_user.is_active,
+        is_superuser=target_user.is_superuser,
+        role=role_name or ("super_admin" if target_user.is_superuser else None),
+        permissions=caps,
+        created_at=target_user.created_at.isoformat(),
+    )
+
