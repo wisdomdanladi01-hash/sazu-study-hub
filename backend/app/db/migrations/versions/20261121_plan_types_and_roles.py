@@ -70,14 +70,17 @@ def upgrade() -> None:
     ]
     for r in roles_data:
         # Insert if not exists
-        bind.execute(
-            sa.text(
-                "INSERT INTO roles (name, description, created_at) "
-                "SELECT :name, :description, :created_at "
-                "WHERE NOT EXISTS (SELECT 1 FROM roles WHERE name = :name)"
-            ),
-            r,
-        )
+        existing = bind.execute(
+            sa.select(roles_table.c.name).where(roles_table.c.name == r["name"])
+        ).scalar_one_or_none()
+        if not existing:
+            bind.execute(
+                roles_table.insert().values(
+                    name=r["name"],
+                    description=r["description"],
+                    created_at=r["created_at"],
+                )
+            )
 
 
 def downgrade() -> None:

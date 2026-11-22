@@ -1,6 +1,6 @@
 """Add email verification to users and level target plus subscriber discounts to access packages.
 
-Revision ID: 20261122_email_verification_and_level_plans
+Revision ID: 20261122_email_level_plans
 Revises: 20261121_plan_types_and_roles
 Create Date: 2026-11-22 01:00:00.000000
 """
@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = "20261122_email_verification_and_level_plans"
+revision: str = "20261122_email_level_plans"
 down_revision: Union[str, None] = "20261121_plan_types_and_roles"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
