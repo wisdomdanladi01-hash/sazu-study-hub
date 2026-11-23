@@ -14,6 +14,9 @@ from app import models as _models  # noqa: F401
 @pytest.fixture(autouse=True)
 def configure_test_settings(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     monkeypatch.setattr(settings, "jwt_secret_key", "test-only-secret-key-with-at-least-32-bytes")
+    monkeypatch.setattr(settings, "brevo_api_key", None)
+    monkeypatch.setattr(settings, "smtp_host", None)
+    monkeypatch.setattr(settings, "smtp_user", None)
     monkeypatch.setattr(settings, "private_storage_dir", str(tmp_path / "private"))
     monkeypatch.setattr(settings, "verification_document_retention_days", 3)
     # Existing tests exercise the download access rules. Students are blocked from raw downloads

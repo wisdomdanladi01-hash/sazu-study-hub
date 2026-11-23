@@ -23,6 +23,7 @@ from app.core.security import (
     require_jwt_secret,
     verify_password,
 )
+from app.core.config import settings
 from app.core.rate_limit import enforce_auth_rate_limit
 from app.db.database import get_db
 from app.models.audit import AuditEvent
@@ -34,13 +35,16 @@ from app.schemas.auth import (
     AdminUserResponse,
     EmailVerificationCodeRequest,
     EmailVerificationSendResponse,
+    ForgotPasswordRequest,
     LoginRequest,
+    MessageResponse,
+    ResetPasswordRequest,
     RoleResponse,
     StudentRegistration,
     UserProfileUpdate,
     UserResponse,
 )
-from app.services.email import send_email_otp
+from app.services.email import is_email_configured, send_email_otp, send_password_reset_otp
 from app.services.errors import ConflictError, PolicyError
 from app.services.verification import register_student
 
@@ -268,7 +272,7 @@ def send_email_verification_code(
     db.commit()
 
     send_email_otp(user.email, user.full_name, code)
-    dev_mode = not (os.getenv("SMTP_HOST") and os.getenv("SMTP_USER"))
+    dev_mode = (settings.app_env != "production") or (not is_email_configured())
 
     return EmailVerificationSendResponse(
         message=f"A 6-digit verification code has been sent to {user.email}.",
@@ -286,10 +290,13 @@ def verify_email_code(
 ) -> UserResponse:
     """Verify the 6-digit email OTP and mark the user's email as confirmed."""
     now = datetime.now(timezone.utc)
+    exp = user.email_verification_expires_at
+    if exp is not None and exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
     if (
         not user.email_verification_code
-        or not user.email_verification_expires_at
-        or user.email_verification_expires_at <= now
+        or not exp
+        or exp <= now
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -319,6 +326,82 @@ def verify_email_code(
     db.refresh(user)
 
     return _user_response(user, db)
+
+
+@router.post("/password/forgot", response_model=MessageResponse)
+def forgot_password(
+    data: ForgotPasswordRequest,
+    _request: Request,
+    db: Session = Depends(get_db),
+) -> MessageResponse:
+    """Request a 6-digit password reset OTP to be sent via Brevo/email."""
+    enforce_auth_rate_limit(_request)
+    email = str(data.email).strip().lower()
+    user = db.scalar(select(User).where(User.email == email))
+    if user and user.is_active:
+        code = f"{secrets.randbelow(900000) + 100000}"
+        user.password_reset_code = code
+        user.password_reset_expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+        db.commit()
+        send_password_reset_otp(user.email, user.full_name, code)
+
+    return MessageResponse(
+        message="If an account exists with that email address, a 6-digit password reset code has been sent."
+    )
+
+
+@router.post("/password/reset", response_model=MessageResponse)
+def reset_password(
+    data: ResetPasswordRequest,
+    _request: Request,
+    db: Session = Depends(get_db),
+) -> MessageResponse:
+    """Verify the 6-digit OTP and reset account password."""
+    enforce_auth_rate_limit(_request)
+    email = str(data.email).strip().lower()
+    user = db.scalar(select(User).where(User.email == email))
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid email or password reset code.",
+        )
+
+    now = datetime.now(timezone.utc)
+    exp = user.password_reset_expires_at
+    if exp is not None and exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    if (
+        not user.password_reset_code
+        or not exp
+        or exp <= now
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The password reset code has expired. Please request a new code.",
+        )
+
+    if user.password_reset_code.strip() != data.code.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid password reset code. Please check and try again.",
+        )
+
+    user.password_hash = hash_password(data.new_password)
+    user.password_reset_code = None
+    user.password_reset_expires_at = None
+    db.add(
+        AuditEvent(
+            actor_user_id=user.id,
+            action="user.password_reset",
+            target_type="user",
+            target_id=str(user.id),
+            event_metadata={"email": user.email},
+        )
+    )
+    db.commit()
+    return MessageResponse(
+        message="Your password has been successfully reset. You can now log in with your new password."
+    )
 
 
 # Admin User & Role Management (Super Admin only for role assignments)

@@ -217,18 +217,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ...current,
       profile: current.profile
         ? {
-            ...current.profile,
-            email: updated.email,
-            fullName: updated.full_name,
-            nickname: updated.nickname,
-            avatarUrl: updated.avatar_url,
-            lastProfileEditAt: updated.last_profile_edit_at,
-            canEditProfileNow: updated.can_edit_profile_now ?? true,
-            nextProfileEditAt: updated.next_profile_edit_at,
-            isAdmin: Boolean(updated.is_admin),
-            role: updated.role,
-            emailVerified: Boolean(updated.email_verified),
-          }
+          ...current.profile,
+          email: updated.email,
+          fullName: updated.full_name,
+          nickname: updated.nickname,
+          avatarUrl: updated.avatar_url,
+          lastProfileEditAt: updated.last_profile_edit_at,
+          canEditProfileNow: updated.can_edit_profile_now ?? true,
+          nextProfileEditAt: updated.next_profile_edit_at,
+          isAdmin: Boolean(updated.is_admin),
+          role: updated.role,
+          emailVerified: Boolean(updated.email_verified),
+        }
         : current.profile,
     }));
   }, [state.profile, state.token]);
@@ -254,12 +254,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ...current,
         profile: current.profile
           ? {
-              ...current.profile,
-              avatarUrl: updated.avatar_url,
-              lastProfileEditAt: updated.last_profile_edit_at,
-              canEditProfileNow: updated.can_edit_profile_now ?? false,
-              nextProfileEditAt: updated.next_profile_edit_at,
-            }
+            ...current.profile,
+            avatarUrl: updated.avatar_url,
+            lastProfileEditAt: updated.last_profile_edit_at,
+            canEditProfileNow: updated.can_edit_profile_now ?? false,
+            nextProfileEditAt: updated.next_profile_edit_at,
+          }
           : current.profile,
       }));
       return { ok: true };

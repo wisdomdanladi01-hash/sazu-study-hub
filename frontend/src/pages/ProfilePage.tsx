@@ -244,14 +244,36 @@ export function ProfilePage() {
             />
           </div>
 
-          <Input
-            label="Email address"
-            type="email"
-            value={profile.email}
-            disabled
-            leftIcon={<Mail className="h-4 w-4" />}
-            hint="Account primary email is fixed for verification integrity."
-          />
+          <div className="w-full">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-sm font-semibold text-ink-800">Email address</label>
+              {profile.emailVerified ? (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                  Verified
+                </span>
+              ) : (
+                <Link
+                  to="/onboarding"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200 hover:bg-amber-100 transition"
+                >
+                  <span>Unverified &bull; Click to verify</span>
+                  <ArrowRight className="h-3 w-3" />
+                </Link>
+              )}
+            </div>
+            <Input
+              type="email"
+              value={profile.email}
+              disabled
+              leftIcon={<Mail className="h-4 w-4" />}
+              hint={
+                profile.emailVerified
+                  ? "Your email is verified. Official notifications and security alerts are sent here."
+                  : "Please verify your email address to enable password resets and security notices."
+              }
+            />
+          </div>
 
           <Button
             type="submit"

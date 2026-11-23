@@ -84,6 +84,33 @@ class Settings(BaseSettings):
             "VERCEL_BLOB_TOKEN",
         ),
     )
+    brevo_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "BREVO_API_KEY",
+            "BREVEO_API_KEY",
+            "SIB_API_KEY",
+        ),
+    )
+    brevo_sender_email: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("BREVO_SENDER_EMAIL", "EMAILS_FROM_EMAIL"),
+    )
+    brevo_sender_name: str = Field(
+        default="SAZU Study Hub",
+        validation_alias=AliasChoices("BREVO_SENDER_NAME", "EMAILS_FROM_NAME"),
+    )
+    smtp_host: str | None = Field(default=None, alias="SMTP_HOST")
+    smtp_port: int = Field(default=587, alias="SMTP_PORT")
+    smtp_user: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("SMTP_USER", "BREVO_SMTP_USER"),
+    )
+    smtp_password: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("SMTP_PASSWORD", "BREVO_SMTP_PASSWORD"),
+    )
+    smtp_tls: bool = Field(default=True, alias="SMTP_TLS")
     storage_provider: str = Field(
         default="auto",
         validation_alias=AliasChoices("STORAGE_PROVIDER", "sazu_STORAGE_PROVIDER"),

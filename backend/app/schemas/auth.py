@@ -96,6 +96,24 @@ class EmailVerificationCodeRequest(BaseModel):
     code: str = Field(min_length=4, max_length=10)
 
 
+class ForgotPasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: EmailStr
+    code: str = Field(min_length=4, max_length=10)
+    new_password: str = Field(min_length=12, max_length=256)
+
+
+class MessageResponse(BaseModel):
+    message: str
+
+
 class RoleResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -4,8 +4,10 @@ import { useAuth } from '@/auth/AuthContext';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
+import { Dialog } from '@/components/ui/Dialog';
 import { AuthShell } from '@/components/AuthShell';
-import { Eye, EyeOff, Mail, Lock, ArrowLeft, KeyRound, Sparkles } from 'lucide-react';
+import { apiRequest } from '@/services/api';
+import { Eye, EyeOff, Mail, Lock, ArrowLeft, KeyRound, Sparkles, CheckCircle2, Send } from 'lucide-react';
 
 export function LoginPage() {
   const { signIn } = useAuth();
@@ -18,6 +20,18 @@ export function LoginPage() {
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Forgot password state
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotStep, setForgotStep] = useState<1 | 2>(1);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotCode, setForgotCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
+  const [forgotSuccess, setForgotSuccess] = useState<string | null>(null);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -46,39 +60,101 @@ export function LoginPage() {
     }
   };
 
+  const handleSendResetCode = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) {
+      setForgotError('Please enter your email address.');
+      return;
+    }
+    setForgotLoading(true);
+    setForgotError(null);
+    try {
+      const res = await apiRequest<{ message: string }>('/auth/password/forgot', {
+        method: 'POST',
+        body: JSON.stringify({ email: forgotEmail.trim() }),
+      }, null);
+      setForgotSuccess(res.message);
+      setForgotStep(2);
+    } catch (cause) {
+      setForgotError(cause instanceof Error ? cause.message : 'Unable to send password reset code.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e: FormEvent) => {
+    e.preventDefault();
+    setForgotError(null);
+    if (!forgotCode.trim()) {
+      setForgotError('Please enter the 6-digit code received in your email.');
+      return;
+    }
+    if (newPassword.length < 12) {
+      setForgotError('New password must be at least 12 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setForgotError('Passwords do not match.');
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      const res = await apiRequest<{ message: string }>('/auth/password/reset', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: forgotEmail.trim(),
+          code: forgotCode.trim(),
+          new_password: newPassword,
+        }),
+      }, null);
+      setForgotSuccess(res.message);
+      setEmail(forgotEmail.trim());
+      setPassword('');
+      setTimeout(() => {
+        setForgotOpen(false);
+        setForgotStep(1);
+        setForgotSuccess(null);
+        setForgotCode('');
+        setNewPassword('');
+        setConfirmPassword('');
+      }, 2500);
+    } catch (cause) {
+      setForgotError(cause instanceof Error ? cause.message : 'Unable to reset password.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
   return (
     <AuthShell>
-      <div className="w-full">
-        <Link
-          to={redirect ? decodeURIComponent(redirect) : '/'}
-          className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-ink-500 hover:text-teal-700 transition-colors mb-4 sm:mb-6"
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to platform
-        </Link>
-
+      <div className="w-full max-w-md mx-auto">
         <div className="mb-6">
-          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-teal-50 border border-teal-200/60 text-teal-800 text-xs font-semibold mb-3">
-            <Sparkles className="h-3 w-3 text-teal-600" />
-            <span>SAZU Student Portal</span>
-          </div>
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-500 hover:text-teal-700 transition-colors mb-3"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            <span>Back to Home</span>
+          </Link>
+
           <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-ink-950 tracking-tight">
             Welcome back
           </h1>
-          <p className="mt-2 text-sm sm:text-base leading-relaxed text-ink-600">
-            Sign in to access your course materials, past questions, and practice assessments.
+          <p className="mt-1.5 text-sm text-ink-600">
+            Sign in to access your course materials, lecture handouts, and practice assessments.
           </p>
         </div>
 
         {error && (
-          <Alert tone="error" className="mb-6">
-            <p className="text-sm font-medium leading-normal">{error}</p>
+          <Alert tone="error" className="mb-5">
+            {error}
           </Alert>
         )}
 
-        <form onSubmit={submit} className="space-y-5" noValidate>
+        <form onSubmit={submit} className="space-y-4">
           <div>
-            <label className="block text-sm font-semibold text-ink-800 mb-1.5">
-              Email Address
+            <label className="block mb-1.5 text-sm font-semibold text-ink-800">
+              Email address
             </label>
             <Input
               type="email"
@@ -97,6 +173,19 @@ export function LoginPage() {
               <label className="block text-sm font-semibold text-ink-800">
                 Password
               </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setForgotEmail(email.trim());
+                  setForgotError(null);
+                  setForgotSuccess(null);
+                  setForgotStep(1);
+                  setForgotOpen(true);
+                }}
+                className="text-xs font-semibold text-teal-700 hover:text-teal-800 hover:underline"
+              >
+                Forgot password?
+              </button>
             </div>
             <Input
               type={showPw ? 'text' : 'password'}
@@ -150,6 +239,103 @@ export function LoginPage() {
           </p>
         </div>
       </div>
+
+      {/* Forgot / Reset Password Dialog */}
+      <Dialog
+        open={forgotOpen}
+        onClose={() => setForgotOpen(false)}
+        title={forgotStep === 1 ? 'Reset your password' : 'Enter reset code'}
+        description={
+          forgotStep === 1
+            ? 'Enter your registered email address and we will dispatch a 6-digit password reset code.'
+            : `A 6-digit code has been sent to ${forgotEmail}. Enter the code and your new password below.`
+        }
+      >
+        <div className="p-4 sm:p-5 space-y-4">
+          {forgotError && <Alert tone="error">{forgotError}</Alert>}
+          {forgotSuccess && <Alert tone="success">{forgotSuccess}</Alert>}
+
+          {forgotStep === 1 ? (
+            <form onSubmit={handleSendResetCode} className="space-y-4">
+              <Input
+                label="Registered email address"
+                type="email"
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                placeholder="e.g. student@sazu.edu.ng"
+                leftIcon={<Mail className="h-4 w-4" />}
+                required
+              />
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="ghost" onClick={() => setForgotOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" loading={forgotLoading} leftIcon={<Send className="h-4 w-4" />}>
+                  Send 6-digit Code
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleResetPassword} className="space-y-4">
+              <Input
+                label="6-Digit Reset Code"
+                value={forgotCode}
+                onChange={(e) => setForgotCode(e.target.value)}
+                placeholder="e.g. 123456"
+                maxLength={10}
+                className="font-mono text-center tracking-widest text-lg"
+                required
+              />
+              <Input
+                label="New Password (min 12 characters)"
+                type={showNewPw ? 'text' : 'password'}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Enter strong new password"
+                leftIcon={<Lock className="h-4 w-4" />}
+                required
+                minLength={12}
+                rightSlot={
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPw((v) => !v)}
+                    className="h-10 w-10 inline-flex items-center justify-center text-ink-400 hover:text-ink-700"
+                  >
+                    {showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                }
+              />
+              <Input
+                label="Confirm New Password"
+                type={showNewPw ? 'text' : 'password'}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Re-enter new password"
+                leftIcon={<Lock className="h-4 w-4" />}
+                required
+                minLength={12}
+              />
+              <div className="flex items-center justify-between gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setForgotStep(1)}
+                  disabled={forgotLoading}
+                >
+                  Resend Code
+                </Button>
+                <Button
+                  type="submit"
+                  loading={forgotLoading}
+                  leftIcon={<CheckCircle2 className="h-4 w-4" />}
+                >
+                  Set New Password
+                </Button>
+              </div>
+            </form>
+          )}
+        </div>
+      </Dialog>
     </AuthShell>
   );
 }
