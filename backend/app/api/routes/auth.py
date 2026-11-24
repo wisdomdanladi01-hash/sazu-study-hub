@@ -271,8 +271,13 @@ def send_email_verification_code(
     user.email_verification_expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
     db.commit()
 
-    send_email_otp(user.email, user.full_name, code)
     dev_mode = (settings.app_env != "production") or (not is_email_configured())
+    email_sent = send_email_otp(user.email, user.full_name, code)
+    if not email_sent and not dev_mode:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Email provider (Brevo) rejected the dispatch. Please ensure BREVO_API_KEY is an API Key (starts with xkeysib-) from Brevo -> SMTP & API -> API Keys tab, and the sender email is verified in Brevo.",
+        )
 
     return EmailVerificationSendResponse(
         message=f"A 6-digit verification code has been sent to {user.email}.",

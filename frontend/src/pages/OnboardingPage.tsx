@@ -79,33 +79,44 @@ export function OnboardingPage() {
   // Load catalogue data
   useEffect(() => {
     let active = true;
-    Promise.all([
-      catalogService.getAcademicCatalogue(),
-      apiRequest<StudentAcademicData>('/dashboard'),
-    ])
-      .then(([data, student]) => {
-        if (!active) return;
-        setCatalogue(data);
-        if (student.academic_profile) {
-          const ap = student.academic_profile;
-          if (ap.matriculation_number) setMatricNumber(ap.matriculation_number);
-          if (ap.jamb_registration_number) setJambNumber(ap.jamb_registration_number);
-          if (ap.programme_id) setProgrammeId(String(ap.programme_id));
-          if (ap.department_id) setDepartmentId(String(ap.department_id));
-          if (ap.admission_session_id) setSessionId(String(ap.admission_session_id));
-          if (ap.verified_level_id) setLevelId(String(ap.verified_level_id));
-        }
+    catalogService
+      .getAcademicCatalogue()
+      .then((data) => {
+        if (active) setCatalogue(data);
       })
       .catch((cause: unknown) => {
         if (active) setStatusError(cause instanceof Error ? cause.message : 'Unable to load academic catalogue.');
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active && !profile) setLoading(false);
       });
+
+    if (profile) {
+      apiRequest<StudentAcademicData>('/dashboard')
+        .then((student) => {
+          if (!active) return;
+          if (student.academic_profile) {
+            const ap = student.academic_profile;
+            if (ap.matriculation_number) setMatricNumber(ap.matriculation_number);
+            if (ap.jamb_registration_number) setJambNumber(ap.jamb_registration_number);
+            if (ap.programme_id) setProgrammeId(String(ap.programme_id));
+            if (ap.department_id) setDepartmentId(String(ap.department_id));
+            if (ap.admission_session_id) setSessionId(String(ap.admission_session_id));
+            if (ap.verified_level_id) setLevelId(String(ap.verified_level_id));
+          }
+        })
+        .catch((cause: unknown) => {
+          if (active) setStatusError(cause instanceof Error ? cause.message : 'Unable to load academic profile.');
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    }
+
     return () => {
       active = false;
     };
-  }, []);
+  }, [profile]);
 
   // Filter departments by selected faculty
   const availableDepartments = useMemo(() => {
