@@ -29,6 +29,7 @@ from app.models.resource import Resource, ResourceCategory
 from app.models.subscription import Subscription, SubscriptionPlan
 from app.models.user import User
 from app.services.errors import ConflictError, NotFoundError, PolicyError
+from app.services.resources import compute_courses_material_coverage
 from app.services.payments import (
     PaymentRejected,
     get_payment_history,
@@ -323,6 +324,7 @@ def academic_catalogue(db: Session = Depends(get_db)) -> dict[str, Any]:
     session_by_id = {session.id: session for session in sessions}
     level_by_id = {level.id: level for level in levels}
     semester_by_id = {semester.id: semester for semester in semesters}
+    coverage_by_course = compute_courses_material_coverage(db)
 
     departments_by_programme: dict[int, list[dict[str, Any]]] = {}
     for department in departments:
@@ -432,6 +434,7 @@ def academic_catalogue(db: Session = Depends(get_db)) -> dict[str, Any]:
                 "academic_level_id": course.academic_level_id,
                 "verification_status": course.verification_status,
                 "source_note": course.source_note,
+                "coverage": coverage_by_course.get(course.id),
                 "offerings": offerings_by_course.get(course.id, []),
             }
             for course in courses

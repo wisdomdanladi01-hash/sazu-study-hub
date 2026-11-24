@@ -25,8 +25,12 @@ import {
   Mail,
   CheckCircle2,
   Sparkles,
-  User,
   Plus,
+  AlertTriangle,
+  ListChecks,
+  Shield,
+  Layers,
+  HelpCircle,
 } from 'lucide-react';
 import { formatDate } from '@/utils/format';
 
@@ -128,13 +132,13 @@ export function AdminOverviewPage() {
   const totalRevenueNaira = ((metrics?.total_revenue_minor ?? 0) / 100).toLocaleString();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       {/* Top Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl font-bold text-ink-950">Administrator Dashboard</h1>
           <p className="mt-1 text-sm text-ink-600">
-            Real-time management overview of students, revenue, academic curriculum, and learning resources.
+            Real-time management overview of curriculum completeness, students, revenue, and learning resources.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -193,7 +197,7 @@ export function AdminOverviewPage() {
                 </span>
                 <span className="flex items-center gap-1 text-emerald-400 font-medium">
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  Verified Account
+                  Verified Admin Account
                 </span>
               </div>
             </div>
@@ -217,11 +221,11 @@ export function AdminOverviewPage() {
         <div className="px-6 py-3 bg-ink-50/70 border-t border-ink-100 flex flex-wrap items-center justify-between gap-4 text-xs text-ink-600">
           <div className="flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="font-medium text-ink-700">Platform Services Active</span>
+            <span className="font-medium text-ink-700">Brevo Transactional Email Live</span>
             <span className="text-ink-400">&bull;</span>
-            <span>Paystack Gateway Live</span>
+            <span>Paystack Gateway Connected</span>
             <span className="text-ink-400">&bull;</span>
-            <span>Neon Database Connected</span>
+            <span>Neon Database Active</span>
           </div>
           <div className="flex items-center gap-3">
             <span className="text-ink-500">
@@ -231,7 +235,7 @@ export function AdminOverviewPage() {
         </div>
       </Card>
 
-      {/* Metrics Grid (6 Encapsulated KPI Cards) */}
+      {/* Primary KPI Metrics (6 Cards) */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         <MetricCard
           title="Platform Revenue"
@@ -283,34 +287,162 @@ export function AdminOverviewPage() {
         />
       </div>
 
-      {/* Quick Action Banner */}
-      <Card className="p-5 bg-gradient-to-r from-ink-900 to-ink-950 text-white border-0 shadow-card">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+      {/* Course Materials Completeness & Gap Analysis Card */}
+      <Card className="p-5 sm:p-6 border border-ink-200/90 shadow-card bg-white">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-ink-100">
           <div>
-            <h2 className="font-display text-base sm:text-lg font-bold">Curriculum, Resources &amp; Pricing Operations</h2>
-            <p className="mt-1 text-xs sm:text-sm text-ink-300 max-w-2xl">
-              Quickly import new course offerings, publish learning materials, configure subscription pricing, or review pending student verifications.
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-teal-600" />
+              <h2 className="font-display text-base sm:text-lg font-bold text-ink-950">
+                Course Materials Completeness &amp; Gap Analysis
+              </h2>
+            </div>
+            <p className="mt-1 text-xs sm:text-sm text-ink-600">
+              Track whether every curriculum course has all 3 essential study materials: <strong>Lecture Handouts</strong>, <strong>Test Past Questions (C.A.)</strong>, and <strong>Exam Past Questions</strong>.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2.5">
-            <Link to="/admin/import">
-              <Button size="sm" className="bg-teal-600 hover:bg-teal-700 text-white" leftIcon={<FileSpreadsheet className="h-4 w-4" />}>
-                Import CSV offerings
-              </Button>
-            </Link>
-            <Link to="/admin/resources">
-              <Button size="sm" variant="outline" className="bg-transparent text-white border-white/20 hover:bg-white/10" leftIcon={<Plus className="h-4 w-4" />}>
-                Upload material
-              </Button>
-            </Link>
-            <Link to="/admin/packages">
-              <Button size="sm" variant="outline" className="bg-transparent text-white border-white/20 hover:bg-white/10" leftIcon={<CreditCard className="h-4 w-4" />}>
-                Manage pricing
-              </Button>
-            </Link>
+          <Link to="/admin/courses">
+            <Button size="sm" leftIcon={<BookOpen className="h-4 w-4" />}>
+              Inspect Course Gaps
+            </Button>
+          </Link>
+        </div>
+
+        {/* Coverage Highlights Grid */}
+        <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">Complete Courses</span>
+            <p className="mt-1 font-display text-2xl font-bold text-emerald-950">
+              {metrics?.complete_courses ?? 0}
+            </p>
+            <p className="text-[11px] text-emerald-700 mt-0.5">Has all 3 materials</p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-teal-50/70 border border-teal-200">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-teal-800">Partial Materials</span>
+            <p className="mt-1 font-display text-2xl font-bold text-teal-950">
+              {metrics?.partial_courses ?? 0}
+            </p>
+            <p className="text-[11px] text-teal-700 mt-0.5">Has 1 or 2 materials</p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800">Lacking Handouts</span>
+            <p className="mt-1 font-display text-2xl font-bold text-amber-950">
+              {metrics?.courses_lacking_handouts ?? 0}
+            </p>
+            <p className="text-[11px] text-amber-700 mt-0.5">Missing lecture notes</p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800">Lacking Test PQ</span>
+            <p className="mt-1 font-display text-2xl font-bold text-amber-950">
+              {metrics?.courses_lacking_test_pqs ?? 0}
+            </p>
+            <p className="text-[11px] text-amber-700 mt-0.5">Missing C.A. test papers</p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-red-50/70 border border-red-200">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-red-800">Lacking Exam PQ</span>
+            <p className="mt-1 font-display text-2xl font-bold text-red-950">
+              {metrics?.courses_lacking_exam_pqs ?? 0}
+            </p>
+            <p className="text-[11px] text-red-700 mt-0.5">Missing exam papers</p>
           </div>
         </div>
       </Card>
+
+      {/* Management Workspaces & Operations Hub (8 Encapsulated Cards) */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-display text-lg font-bold text-ink-950">Management Workspaces</h2>
+            <p className="text-xs text-ink-600">Direct access to administrative operational tools and services.</p>
+          </div>
+        </div>
+
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <WorkspaceCard
+            title="Learning Resources"
+            description="Upload past questions, lecture handouts, and multi-page documents with secure watermarking."
+            icon={FileText}
+            badge={`${metrics?.published_resources ?? 0} files in repository`}
+            link="/admin/resources"
+            actionLabel="Manage Resources"
+            tone="teal"
+          />
+
+          <WorkspaceCard
+            title="Course Units & Coverage"
+            description="View all curriculum units, verify course listings, and inspect material completeness."
+            icon={BookOpen}
+            badge={`${metrics?.total_course_offerings ?? 0} course offerings`}
+            link="/admin/courses"
+            actionLabel="View Courses"
+            tone="blue"
+          />
+
+          <WorkspaceCard
+            title="Bulk CSV Import"
+            description="Upload and import course offerings in bulk using verified UTF-8 spreadsheet templates."
+            icon={FileSpreadsheet}
+            badge="Atomic DB Import"
+            link="/admin/import"
+            actionLabel="Import Offerings"
+            tone="green"
+          />
+
+          <WorkspaceCard
+            title="Academic Directory"
+            description="Manage faculties, departments, programmes, academic sessions, and semester schedules."
+            icon={GraduationCap}
+            badge={`${metrics?.total_faculties ?? 0} faculties, ${metrics?.total_departments ?? 0} depts`}
+            link="/admin/academic"
+            actionLabel="Open Directory"
+            tone="neutral"
+          />
+
+          <WorkspaceCard
+            title="Student Verification"
+            description="Review student matriculation numbers, JAMB credentials, and uploaded student ID cards."
+            icon={UserCheck}
+            badge={`${metrics?.pending_verifications ?? 0} awaiting review`}
+            link="/admin/verification"
+            actionLabel="Review Queue"
+            tone={metrics && metrics.pending_verifications > 0 ? 'amber' : 'green'}
+          />
+
+          <WorkspaceCard
+            title="Packages & Pricing"
+            description="Configure semester passes, cross-level study access, micro-entitlements, and Paystack prices."
+            icon={CreditCard}
+            badge={`₦${totalRevenueNaira} revenue`}
+            link="/admin/packages"
+            actionLabel="Configure Pricing"
+            tone="green"
+          />
+
+          <WorkspaceCard
+            title="Practice Assessments"
+            description="Create computer-based practice tests (CBT), configure question banks, timers, and solutions."
+            icon={ListChecks}
+            badge="CBT Exam Prep"
+            link="/admin/assessments"
+            actionLabel="Manage Tests"
+            tone="teal"
+          />
+
+          <WorkspaceCard
+            title="Admin Authorities"
+            description="Manage administrative staff accounts, grant superuser privileges, and assign roles."
+            icon={Shield}
+            badge="RBAC Authorities"
+            link="/admin/users"
+            actionLabel="Manage Staff"
+            tone="neutral"
+          />
+        </div>
+      </div>
 
       {/* Activity Sections: 2x2 Encapsulated Cards Grid */}
       <div className="grid lg:grid-cols-2 gap-6">
@@ -576,6 +708,62 @@ export function AdminOverviewPage() {
         </Dialog>
       )}
     </div>
+  );
+}
+
+function WorkspaceCard({
+  title,
+  description,
+  icon: Icon,
+  badge,
+  link,
+  actionLabel,
+  tone,
+}: {
+  title: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+  badge: string;
+  link: string;
+  actionLabel: string;
+  tone: 'teal' | 'blue' | 'green' | 'amber' | 'neutral';
+}) {
+  const iconTones = {
+    teal: 'bg-teal-50 text-teal-700',
+    blue: 'bg-blue-50 text-blue-700',
+    green: 'bg-emerald-50 text-emerald-700',
+    amber: 'bg-amber-50 text-amber-700',
+    neutral: 'bg-ink-100 text-ink-700',
+  }[tone];
+
+  return (
+    <Card className="p-5 flex flex-col justify-between hover:border-teal-300 hover:shadow-card transition-all group border border-ink-200/90">
+      <div>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className={`h-10 w-10 rounded-xl inline-flex items-center justify-center shrink-0 ${iconTones}`}>
+            <Icon className="h-5 w-5" />
+          </div>
+          <span className="text-[11px] font-semibold text-ink-500 bg-ink-50 px-2 py-0.5 rounded-full border border-ink-100">
+            {badge}
+          </span>
+        </div>
+        <h3 className="font-display font-bold text-sm text-ink-950 group-hover:text-teal-800 transition-colors">
+          {title}
+        </h3>
+        <p className="mt-1.5 text-xs text-ink-600 leading-relaxed line-clamp-2">
+          {description}
+        </p>
+      </div>
+
+      <div className="mt-4 pt-3 border-t border-ink-100 flex items-center justify-between">
+        <Link
+          to={link}
+          className="text-xs font-bold text-teal-700 group-hover:text-teal-900 inline-flex items-center gap-1 transition-colors"
+        >
+          {actionLabel} <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
+        </Link>
+      </div>
+    </Card>
   );
 }
 

@@ -1,38 +1,33 @@
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext';
 import { BrandMark } from '@/components/BrandMark';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import {
   LayoutDashboard,
-  GraduationCap,
-  BookOpen,
-  FileSpreadsheet,
-  FileText,
-  ListChecks,
-  UserCheck,
-  CreditCard,
   LogOut,
   ExternalLink,
   ShieldAlert,
-  Users,
+  ArrowLeft,
+  ChevronRight,
+  Shield,
 } from 'lucide-react';
 
-const ADMIN_LINKS = [
-  { to: '/admin', label: 'Overview', icon: LayoutDashboard, end: true },
-  { to: '/admin/academic', label: 'Academic Directory', icon: GraduationCap, capability: 'manage_academic_catalogue' },
-  { to: '/admin/courses', label: 'Course Offerings', icon: BookOpen, capability: 'manage_academic_catalogue' },
-  { to: '/admin/import', label: 'CSV Import', icon: FileSpreadsheet, capability: 'manage_academic_catalogue' },
-  { to: '/admin/resources', label: 'Learning Resources', icon: FileText, capability: 'manage_resources' },
-  { to: '/admin/assessments', label: 'Practice Tests', icon: ListChecks, capability: 'manage_assessments' },
-  { to: '/admin/verification', label: 'Student Verification', icon: UserCheck, capability: 'manage_verifications' },
-  { to: '/admin/packages', label: 'Packages & Access', icon: CreditCard, capability: 'manage_packages' },
-  { to: '/admin/users', label: 'Admin Authorities', icon: Users, capability: 'manage_admins' },
-];
+const SUBPAGE_NAMES: Record<string, string> = {
+  '/admin/academic': 'Academic Directory',
+  '/admin/courses': 'Course Offerings & Coverage',
+  '/admin/import': 'Bulk CSV Import',
+  '/admin/resources': 'Learning Resources',
+  '/admin/assessments': 'Practice Tests',
+  '/admin/verification': 'Student Verification Queue',
+  '/admin/packages': 'Packages & Pricing',
+  '/admin/users': 'Administrator Authorities',
+};
 
 export function AdminLayout() {
   const { profile, isAuthenticated, isAdmin, isLoading, signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   if (isLoading) {
     return (
@@ -71,70 +66,91 @@ export function AdminLayout() {
     navigate('/');
   };
 
+  const isRootDashboard = location.pathname === '/admin' || location.pathname === '/admin/';
+  const currentSubPageName = SUBPAGE_NAMES[location.pathname] || 'Workspace';
+
   return (
-    <div className="min-h-screen bg-ink-50 flex flex-col">
-      {/* Top Navbar */}
-      <header className="sticky top-0 z-40 bg-ink-950 text-white border-b border-ink-800">
+    <div className="min-h-screen bg-ink-50/70 flex flex-col">
+      {/* Simple, Professional, Clean Header */}
+      <header className="sticky top-0 z-40 bg-ink-950 text-white border-b border-ink-800 shadow-sm">
         <div className="container-page flex h-16 items-center justify-between gap-4">
+          {/* Left: Brand + Breadcrumb */}
           <div className="flex items-center gap-3">
             <BrandMark />
-            <span className="rounded-md bg-teal-500/20 text-teal-300 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider">
-              Admin Portal
+            <span className="hidden sm:inline-flex items-center gap-1 rounded-md bg-teal-500/20 text-teal-300 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider">
+              <Shield className="h-3 w-3" />
+              Admin
             </span>
+
+            {!isRootDashboard && (
+              <div className="flex items-center gap-2 pl-2 border-l border-ink-800 text-xs">
+                <Link
+                  to="/admin"
+                  className="text-ink-400 hover:text-white transition-colors flex items-center gap-1 font-medium"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  <span className="hidden md:inline">Dashboard</span>
+                </Link>
+                <ChevronRight className="h-3.5 w-3.5 text-ink-600" />
+                <span className="text-teal-300 font-semibold truncate max-w-[180px] sm:max-w-xs">
+                  {currentSubPageName}
+                </span>
+              </div>
+            )}
           </div>
 
-          <div className="flex items-center gap-3">
+          {/* Right: User Profile + Quick Actions */}
+          <div className="flex items-center gap-3 sm:gap-4">
+            <Link
+              to="/admin"
+              className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${isRootDashboard
+                  ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
+                  : 'text-ink-300 hover:text-white hover:bg-ink-800'
+                }`}
+            >
+              <LayoutDashboard className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Overview Dashboard</span>
+            </Link>
+
             <Link
               to="/dashboard"
-              className="hidden sm:inline-flex items-center gap-1.5 text-xs font-medium text-ink-300 hover:text-white transition-colors"
+              className="inline-flex items-center gap-1 text-xs font-medium text-ink-300 hover:text-white transition-colors"
+              title="Switch to Student View"
             >
-              Student portal <ExternalLink className="h-3.5 w-3.5" />
+              <span className="hidden md:inline">Student View</span>
+              <ExternalLink className="h-3.5 w-3.5" />
             </Link>
-            <div className="h-4 w-px bg-ink-800 hidden sm:block" />
-            <span className="text-xs text-ink-300 hidden md:inline truncate max-w-xs">
-              {profile?.fullName} ({profile?.role ?? 'Admin'})
-            </span>
+
+            <div className="h-4 w-px bg-ink-800" />
+
+            {/* Profile Pill */}
+            <div className="flex items-center gap-2">
+              <div className="h-7 w-7 rounded-lg bg-teal-800 text-white font-bold flex items-center justify-center text-xs overflow-hidden shrink-0">
+                {profile?.avatarUrl ? (
+                  <img src={profile.avatarUrl} alt={profile.fullName} className="h-full w-full object-cover" />
+                ) : (
+                  profile?.fullName?.charAt(0).toUpperCase() || 'A'
+                )}
+              </div>
+              <span className="text-xs text-ink-200 hidden lg:inline font-medium truncate max-w-[140px]">
+                {profile?.fullName}
+              </span>
+            </div>
+
             <Button
               variant="outline"
               size="sm"
               onClick={handleSignOut}
-              className="bg-transparent border-ink-700 text-ink-200 hover:text-white hover:bg-ink-800"
+              className="bg-transparent border-ink-800 text-ink-300 hover:text-white hover:bg-ink-800 text-xs px-2.5"
               leftIcon={<LogOut className="h-3.5 w-3.5" />}
             >
-              Sign out
+              <span className="hidden sm:inline">Sign out</span>
             </Button>
           </div>
         </div>
       </header>
 
-      {/* Main Admin Sub-nav */}
-      <div className="bg-white border-b border-ink-100 overflow-x-auto">
-        <div className="container-page flex items-center gap-1 py-2">
-          {ADMIN_LINKS.filter((item) => {
-            if (profile?.isSuperuser) return true;
-            if (!item.capability) return true;
-            return profile?.permissions?.includes(item.capability);
-          }).map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              className={({ isActive }) =>
-                `whitespace-nowrap inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors ${
-                  isActive
-                    ? 'bg-teal-50 text-teal-800 border border-teal-200'
-                    : 'text-ink-600 hover:text-ink-950 hover:bg-ink-50'
-                }`
-              }
-            >
-              <item.icon className="h-4 w-4" />
-              {item.label}
-            </NavLink>
-          ))}
-        </div>
-      </div>
-
-      {/* Content */}
+      {/* Main Content Area */}
       <main className="flex-1 py-6 sm:py-8">
         <div className="container-page">
           <Outlet />

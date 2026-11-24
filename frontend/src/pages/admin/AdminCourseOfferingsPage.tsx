@@ -29,6 +29,7 @@ export function AdminCourseOfferingsPage() {
   const [levelFilter, setLevelFilter] = useState('');
   const [semesterFilter, setSemesterFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [coverageFilter, setCoverageFilter] = useState('');
 
   // Edit offering modal
   const [editItem, setEditItem] = useState<AdminCourseOffering | null>(null);
@@ -62,7 +63,19 @@ export function AdminCourseOfferingsPage() {
     const matchesLevel = !levelFilter || item.level === levelFilter;
     const matchesSem = !semesterFilter || String(item.semester) === semesterFilter;
     const matchesStatus = !statusFilter || item.verification_status === statusFilter;
-    return matchesSearch && matchesProg && matchesLevel && matchesSem && matchesStatus;
+    const matchesCoverage = (() => {
+      if (!coverageFilter) return true;
+      const cov = item.coverage;
+      if (!cov) return coverageFilter === 'missing_all';
+      if (coverageFilter === 'complete') return cov.status === 'complete';
+      if (coverageFilter === 'partial') return cov.status === 'partial';
+      if (coverageFilter === 'missing_all') return cov.status === 'missing_all';
+      if (coverageFilter === 'lacking_handout') return !cov.has_handout;
+      if (coverageFilter === 'lacking_test_pq') return !cov.has_test_pq;
+      if (coverageFilter === 'lacking_exam_pq') return !cov.has_exam_pq;
+      return true;
+    })();
+    return matchesSearch && matchesProg && matchesLevel && matchesSem && matchesStatus && matchesCoverage;
   });
 
   return (
@@ -90,8 +103,8 @@ export function AdminCourseOfferingsPage() {
 
       {/* Filter Controls */}
       <Card className="p-4 sm:p-5">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <div className="sm:col-span-2">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="sm:col-span-2 xl:col-span-2">
             <Input
               label="Search course"
               type="search"
@@ -117,6 +130,15 @@ export function AdminCourseOfferingsPage() {
             <option value="">All semesters</option>
             <option value="1">1st Semester</option>
             <option value="2">2nd Semester</option>
+          </Select>
+          <Select label="Material Completeness" value={coverageFilter} onChange={(e) => setCoverageFilter(e.target.value)}>
+            <option value="">All completeness</option>
+            <option value="complete">Complete (3/3)</option>
+            <option value="partial">Partial materials</option>
+            <option value="missing_all">Missing all (0/3)</option>
+            <option value="lacking_handout">Lacking Handout</option>
+            <option value="lacking_test_pq">Lacking Test PQ</option>
+            <option value="lacking_exam_pq">Lacking Exam PQ</option>
           </Select>
           <Select label="Verification" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">All statuses</option>
@@ -154,6 +176,7 @@ export function AdminCourseOfferingsPage() {
                   <th className="px-4 py-3">Level &amp; Sem</th>
                   <th className="px-4 py-3">Units</th>
                   <th className="px-4 py-3">Curriculum / Session</th>
+                  <th className="px-4 py-3">Material Completeness</th>
                   <th className="px-4 py-3">Verification</th>
                   <th className="px-4 py-3">Source Note</th>
                   <th className="px-4 py-3 text-right">Actions</th>
@@ -173,6 +196,67 @@ export function AdminCourseOfferingsPage() {
                       <td className="px-4 py-3 text-xs font-bold text-ink-800">{item.credit_units ?? '—'}</td>
                       <td className="px-4 py-3 text-xs text-ink-500 whitespace-nowrap">
                         {item.academic_session ? `${item.academic_session} (${item.curriculum_version})` : item.curriculum_version}
+                      </td>
+                      <td className="px-4 py-3">
+                        {item.coverage ? (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5">
+                              <Badge
+                                tone={
+                                  item.coverage.status === 'complete'
+                                    ? 'green'
+                                    : item.coverage.status === 'partial'
+                                    ? 'amber'
+                                    : 'red'
+                                }
+                              >
+                                {item.coverage.status === 'complete'
+                                  ? 'Complete (3/3)'
+                                  : item.coverage.status === 'partial'
+                                  ? `Partial (${item.coverage.available_core_count}/3)`
+                                  : 'Missing All (0/3)'}
+                              </Badge>
+                              <Link
+                                to={`/admin/resources?search=${encodeURIComponent(item.course_code)}`}
+                                className="text-[11px] font-semibold text-teal-700 hover:underline"
+                                title={`Manage materials for ${item.course_code}`}
+                              >
+                                ({item.coverage.counts.total} item{item.coverage.counts.total === 1 ? '' : 's'})
+                              </Link>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1 text-[10px]">
+                              <span
+                                className={`rounded px-1.5 py-0.5 font-medium ${
+                                  item.coverage.has_handout
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'bg-rose-50 text-rose-600 border border-rose-200 line-through'
+                                }`}
+                              >
+                                Handout
+                              </span>
+                              <span
+                                className={`rounded px-1.5 py-0.5 font-medium ${
+                                  item.coverage.has_test_pq
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'bg-rose-50 text-rose-600 border border-rose-200 line-through'
+                                }`}
+                              >
+                                Test PQ
+                              </span>
+                              <span
+                                className={`rounded px-1.5 py-0.5 font-medium ${
+                                  item.coverage.has_exam_pq
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'bg-rose-50 text-rose-600 border border-rose-200 line-through'
+                                }`}
+                              >
+                                Exam PQ
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-ink-400">No data</span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <Badge tone={isVerified ? 'green' : 'amber'}>

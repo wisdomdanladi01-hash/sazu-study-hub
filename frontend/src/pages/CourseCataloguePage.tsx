@@ -159,6 +159,7 @@ export function CourseCataloguePage() {
 
 function CourseOfferingCard({ course, offering }: OfferingRow) {
   const isUnverified = offering.verification_status !== 'verified';
+  const coverage = course.coverage;
   return (
     <Card className="flex h-full flex-col p-5 transition-shadow hover:shadow-pop">
       <div className="flex items-start justify-between gap-3">
@@ -176,6 +177,59 @@ function CourseOfferingCard({ course, offering }: OfferingRow) {
         {offering.credit_units != null && <Badge tone="teal">{offering.credit_units} units</Badge>}
         {offering.course_type && <Badge tone="neutral">{offering.course_type}</Badge>}
       </div>
+
+      {coverage && (
+        <div className="mt-4 rounded-xl border border-ink-100 bg-ink-50/60 p-3">
+          <div className="flex items-center justify-between text-xs mb-2">
+            <span className="font-semibold text-ink-700">Course Materials</span>
+            <Badge
+              tone={
+                coverage.status === 'complete'
+                  ? 'green'
+                  : coverage.status === 'partial'
+                  ? 'amber'
+                  : 'neutral'
+              }
+            >
+              {coverage.status === 'complete'
+                ? 'Complete (3/3)'
+                : coverage.status === 'partial'
+                ? `${coverage.available_core_count}/3 Available`
+                : 'Coming soon'}
+            </Badge>
+          </div>
+          <div className="flex flex-wrap gap-1.5 text-[11px]">
+            <span
+              className={`rounded px-2 py-0.5 font-medium ${
+                coverage.has_handout
+                  ? 'bg-emerald-100/70 text-emerald-800'
+                  : 'bg-ink-100 text-ink-400'
+              }`}
+            >
+              {coverage.has_handout ? '✓ Handout' : '○ No Handout'}
+            </span>
+            <span
+              className={`rounded px-2 py-0.5 font-medium ${
+                coverage.has_test_pq
+                  ? 'bg-emerald-100/70 text-emerald-800'
+                  : 'bg-ink-100 text-ink-400'
+              }`}
+            >
+              {coverage.has_test_pq ? '✓ Test PQ' : '○ No Test PQ'}
+            </span>
+            <span
+              className={`rounded px-2 py-0.5 font-medium ${
+                coverage.has_exam_pq
+                  ? 'bg-emerald-100/70 text-emerald-800'
+                  : 'bg-ink-100 text-ink-400'
+              }`}
+            >
+              {coverage.has_exam_pq ? '✓ Exam PQ' : '○ No Exam PQ'}
+            </span>
+          </div>
+        </div>
+      )}
+
       <p className="mt-4 flex-1 text-xs leading-relaxed text-ink-500">
         {offering.source_note ?? course.source_note ?? 'Source details are not recorded.'}
       </p>

@@ -615,3 +615,117 @@ def resource_is_available(resource: Resource, now: datetime | None = None) -> bo
     if resource.available_until is not None and _utc(resource.available_until) <= current:
         return False
     return True
+
+
+def compute_courses_material_coverage(db: Session, course_ids: list[int] | None = None) -> dict[int, dict[str, Any]]:
+    """
+    Computes learning material completeness and coverage for academic courses:
+    - has_handout: whether a lecture handout/notes resource exists
+    - has_test_pq: whether a continuous assessment test past question exists
+    - has_exam_pq: whether a semester exam past question exists
+    - has_solution: whether a marking guide or solution key exists
+    - status: 'complete' (has all 3 core materials), 'partial' (1-2), or 'missing_all' (0)
+    - missing_items: list of missing material labels
+    - available_items: list of available material labels
+    """
+    query = select(Resource).where(Resource.is_published.is_(True))
+    if course_ids is not None:
+        query = query.where(Resource.course_id.in_(course_ids))
+    resources = db.scalars(query).all()
+
+    resource_types = {rt.id: rt.name.lower() for rt in db.scalars(select(ResourceType)).all()}
+
+    resources_by_course: dict[int, list[Resource]] = {}
+    for r in resources:
+        if r.course_id:
+            resources_by_course.setdefault(r.course_id, []).append(r)
+
+    courses_query = select(Course)
+    if course_ids is not None:
+        courses_query = courses_query.where(Course.id.in_(course_ids))
+    courses = db.scalars(courses_query).all()
+
+    coverage_map: dict[int, dict[str, Any]] = {}
+    for c in courses:
+        c_resources = resources_by_course.get(c.id, [])
+        has_handout = False
+        has_test_pq = False
+        has_exam_pq = False
+        has_solution = False
+
+        handouts_count = 0
+        test_pqs_count = 0
+        exam_pqs_count = 0
+        solutions_count = 0
+
+        for r in c_resources:
+            rt_name = resource_types.get(r.resource_type_id, "") if r.resource_type_id else ""
+            title_lower = (r.title or "").lower()
+            desc_lower = (r.description or "").lower()
+            combined = f"{rt_name} {title_lower} {desc_lower}"
+
+            if "solution" in combined or "marking" in combined or "answer" in combined:
+                has_solution = True
+                solutions_count += 1
+            if "test" in combined or "c.a." in combined or "continuous assessment" in combined:
+                has_test_pq = True
+                test_pqs_count += 1
+            elif "exam" in combined or "examination" in combined:
+                has_exam_pq = True
+                exam_pqs_count += 1
+            elif "handout" in combined or "lecture note" in combined or "syllabus" in combined or "module" in combined or "slide" in combined:
+                has_handout = True
+                handouts_count += 1
+            else:
+                if "handout" in rt_name:
+                    has_handout = True
+                    handouts_count += 1
+                elif "test" in rt_name:
+                    has_test_pq = True
+                    test_pqs_count += 1
+                elif "exam" in rt_name:
+                    has_exam_pq = True
+                    exam_pqs_count += 1
+
+        missing = []
+        if not has_handout:
+            missing.append("Lecture Handout")
+        if not has_test_pq:
+            missing.append("Test Past Question")
+        if not has_exam_pq:
+            missing.append("Exam Past Question")
+
+        available = []
+        if has_handout:
+            available.append("Lecture Handout")
+        if has_test_pq:
+            available.append("Test Past Question")
+        if has_exam_pq:
+            available.append("Exam Past Question")
+        if has_solution:
+            available.append("Solution & Marking Guide")
+
+        available_core_count = (1 if has_handout else 0) + (1 if has_test_pq else 0) + (1 if has_exam_pq else 0)
+        status = "complete" if available_core_count == 3 else ("partial" if available_core_count > 0 else "missing_all")
+
+        coverage_map[c.id] = {
+            "has_handout": has_handout,
+            "has_test_pq": has_test_pq,
+            "has_exam_pq": has_exam_pq,
+            "has_solution": has_solution,
+            "status": status,
+            "missing_items": missing,
+            "available_items": available,
+            "available_core_count": available_core_count,
+            "total_core_count": 3,
+            "counts": {
+                "handouts": handouts_count,
+                "test_pqs": test_pqs_count,
+                "exam_pqs": exam_pqs_count,
+                "solutions": solutions_count,
+                "total": len(c_resources),
+            },
+        }
+
+    return coverage_map
+

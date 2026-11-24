@@ -28,6 +28,7 @@ from app.models.resource import Resource
 from app.models.identity import VerificationSubmission
 from app.models.commerce import AccessPackage, Payment
 from app.models.subscription import Subscription
+from app.services.resources import compute_courses_material_coverage
 from sqlalchemy import func
 from app.schemas.academic import (
     AcademicSessionCreate,
@@ -416,12 +417,134 @@ def admin_update_course(
     return course
 
 
-@router.get("/course-offerings", response_model=list[CourseOfferingResponse])
+@router.get("/course-offerings")
 def admin_list_course_offerings(
     _admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
-) -> list[CourseOffering]:
-    return db.scalars(select(CourseOffering).order_by(CourseOffering.id.asc())).all()
+) -> list[dict]:
+    offerings = db.scalars(select(CourseOffering).order_by(CourseOffering.id.asc())).all()
+    courses = {c.id: c for c in db.scalars(select(Course)).all()}
+    curricula = {cv.id: cv for cv in db.scalars(select(CurriculumVersion)).all()}
+    programmes = {p.id: p for p in db.scalars(select(Programme)).all()}
+    departments = {d.id: d for d in db.scalars(select(Department)).all()}
+    sessions = {s.id: s for s in db.scalars(select(AcademicSession)).all()}
+    levels = {l.id: l for l in db.scalars(select(AcademicLevel)).all()}
+    semesters = {sem.id: sem for sem in db.scalars(select(Semester)).all()}
+
+    coverage_by_course = compute_courses_material_coverage(db)
+
+    result = []
+    for off in offerings:
+        course = courses.get(off.course_id)
+        curriculum = curricula.get(off.curriculum_version_id)
+        session = sessions.get(curriculum.academic_session_id) if curriculum else None
+        level = levels.get(off.academic_level_id)
+        semester = semesters.get(off.semester_id)
+
+        prog_id = course.programme_id if course else (curriculum.programme_id if curriculum else None)
+        prog = programmes.get(prog_id) if prog_id else None
+        dept_id = course.department_id if course else None
+        dept = departments.get(dept_id) if dept_id else None
+
+        cov = coverage_by_course.get(off.course_id) if off.course_id else None
+
+        result.append({
+            "id": off.id,
+            "course_id": off.course_id,
+            "course_code": course.code if course else "",
+            "course_title": course.title if course else "",
+            "programme_id": prog_id,
+            "programme_name": prog.name if prog else None,
+            "department_id": dept_id,
+            "department_name": dept.name if dept else None,
+            "curriculum_version_id": off.curriculum_version_id,
+            "curriculum_version": curriculum.version if curriculum else "",
+            "academic_session_id": curriculum.academic_session_id if curriculum else None,
+            "academic_session": session.name if session else None,
+            "academic_level_id": off.academic_level_id,
+            "level": level.code if level else None,
+            "semester_id": off.semester_id,
+            "semester": semester.number if semester else None,
+            "credit_units": off.credit_units,
+            "course_type": off.course_type,
+            "verification_status": off.verification_status,
+            "source_note": off.source_note,
+            "is_active": off.is_active,
+            "coverage": cov,
+        })
+    return result
+
+
+@router.get("/courses/coverage")
+def admin_courses_coverage(
+    _admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    courses = db.scalars(select(Course).order_by(Course.code.asc())).all()
+    departments = {d.id: d.name for d in db.scalars(select(Department)).all()}
+    levels = {l.id: l.name for l in db.scalars(select(AcademicLevel)).all()}
+    coverage_by_course = compute_courses_material_coverage(db)
+
+    items = []
+    complete_count = 0
+    partial_count = 0
+    missing_all_count = 0
+    lacking_handouts = 0
+    lacking_test_pqs = 0
+    lacking_exam_pqs = 0
+
+    for c in courses:
+        cov = coverage_by_course.get(c.id, {
+            "has_handout": False,
+            "has_test_pq": False,
+            "has_exam_pq": False,
+            "has_solution": False,
+            "status": "missing_all",
+            "missing_items": ["Lecture Handout", "Test Past Question", "Exam Past Question"],
+            "available_items": [],
+            "available_core_count": 0,
+            "total_core_count": 3,
+            "counts": {"handouts": 0, "test_pqs": 0, "exam_pqs": 0, "solutions": 0, "total": 0},
+        })
+
+        if cov["status"] == "complete":
+            complete_count += 1
+        elif cov["status"] == "partial":
+            partial_count += 1
+        else:
+            missing_all_count += 1
+
+        if not cov["has_handout"]:
+            lacking_handouts += 1
+        if not cov["has_test_pq"]:
+            lacking_test_pqs += 1
+        if not cov["has_exam_pq"]:
+            lacking_exam_pqs += 1
+
+        items.append({
+            "id": c.id,
+            "code": c.code,
+            "title": c.title,
+            "department_id": c.department_id,
+            "department_name": departments.get(c.department_id),
+            "academic_level_id": c.academic_level_id,
+            "level_name": levels.get(c.academic_level_id),
+            "verification_status": c.verification_status,
+            "coverage": cov,
+        })
+
+    return {
+        "summary": {
+            "total_courses": len(courses),
+            "complete_courses": complete_count,
+            "partial_courses": partial_count,
+            "missing_all_courses": missing_all_count,
+            "lacking_handouts": lacking_handouts,
+            "lacking_test_pqs": lacking_test_pqs,
+            "lacking_exam_pqs": lacking_exam_pqs,
+        },
+        "courses": items,
+    }
 
 
 @router.patch(
@@ -712,6 +835,14 @@ def admin_overview(
         select(func.count(User.id)).where(User.is_superuser.is_(False), User.email_verified.is_(True))
     ) or 0
 
+    coverage_by_course = compute_courses_material_coverage(db)
+    complete_courses = sum(1 for cov in coverage_by_course.values() if cov["status"] == "complete")
+    partial_courses = sum(1 for cov in coverage_by_course.values() if cov["status"] == "partial")
+    missing_all_courses = sum(1 for cov in coverage_by_course.values() if cov["status"] == "missing_all")
+    lacking_handouts = sum(1 for cov in coverage_by_course.values() if not cov["has_handout"])
+    lacking_test_pqs = sum(1 for cov in coverage_by_course.values() if not cov["has_test_pq"])
+    lacking_exam_pqs = sum(1 for cov in coverage_by_course.values() if not cov["has_exam_pq"])
+
     recent_resources = db.scalars(
         select(Resource).order_by(Resource.created_at.desc(), Resource.id.desc()).limit(5)
     ).all()
@@ -746,6 +877,12 @@ def admin_overview(
             "total_revenue_minor": total_revenue_minor,
             "total_students": total_students,
             "verified_students": verified_students,
+            "complete_courses": complete_courses,
+            "partial_courses": partial_courses,
+            "missing_all_courses": missing_all_courses,
+            "courses_lacking_handouts": lacking_handouts,
+            "courses_lacking_test_pqs": lacking_test_pqs,
+            "courses_lacking_exam_pqs": lacking_exam_pqs,
         },
         "recent_resources": [
             {

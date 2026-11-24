@@ -122,6 +122,7 @@ export interface AcademicCatalogue {
     academic_level_id: number | null;
     verification_status: string;
     source_note: string | null;
+    coverage?: CourseMaterialCoverage;
     offerings: Array<{
       id: number;
       curriculum_version_id: number;
@@ -169,6 +170,25 @@ export interface PracticeAssessment {
   questions: AssessmentQuestion[];
 }
 
+export interface CourseMaterialCoverage {
+  has_handout: boolean;
+  has_test_pq: boolean;
+  has_exam_pq: boolean;
+  has_solution: boolean;
+  status: 'complete' | 'partial' | 'missing_all';
+  missing_items: string[];
+  available_items: string[];
+  available_core_count: number;
+  total_core_count: number;
+  counts: {
+    handouts: number;
+    test_pqs: number;
+    exam_pqs: number;
+    solutions: number;
+    total: number;
+  };
+}
+
 export interface AdminOverview {
   metrics: {
     total_resources: number;
@@ -187,6 +207,12 @@ export interface AdminOverview {
     total_students?: number;
     verified_students?: number;
     total_revenue_minor?: number;
+    complete_courses?: number;
+    partial_courses?: number;
+    missing_all_courses?: number;
+    courses_lacking_handouts?: number;
+    courses_lacking_test_pqs?: number;
+    courses_lacking_exam_pqs?: number;
   };
   recent_resources: Array<{
     id: number;
@@ -245,6 +271,7 @@ export interface AdminCourseOffering {
   verification_status: 'verified' | 'user_supplied' | 'pending_confirmation';
   source_note: string | null;
   is_active: boolean;
+  coverage?: CourseMaterialCoverage;
 }
 
 export interface VerificationQueueItem {
