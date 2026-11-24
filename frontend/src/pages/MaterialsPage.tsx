@@ -93,7 +93,7 @@ export function MaterialsPage() {
       </div>
 
       {/* Search + mobile filter toggle */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-5">
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <div className="flex-1">
           <Input
             type="search"
@@ -124,6 +124,33 @@ export function MaterialsPage() {
             <option value="title-desc">Title Z–A</option>
           </Select>
         </div>
+      </div>
+
+      {/* Quick Priority Spotlight Tags */}
+      <div className="flex flex-wrap items-center gap-2 mb-6 text-xs">
+        <span className="font-semibold text-ink-500">Academic Focus:</span>
+        <button
+          type="button"
+          onClick={() => update({ level: '100', q: '', page: '' })}
+          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border transition font-medium ${
+            level === '100'
+              ? 'bg-teal-700 text-white border-teal-700 shadow-xs'
+              : 'bg-teal-50 text-teal-800 border-teal-200 hover:bg-teal-100'
+          }`}
+        >
+          <span>✨ 100L Foundation Gateway (First-Year Essentials)</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => update({ q: 'MTH201', page: '' })}
+          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border transition font-medium ${
+            q.toUpperCase().includes('MTH201')
+              ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+              : 'bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100'
+          }`}
+        >
+          <span>🔥 MTH201 Pass-Booster (Mathematical Methods PQ &amp; Solutions)</span>
+        </button>
       </div>
 
       <div className="grid lg:grid-cols-[260px_1fr] gap-6">

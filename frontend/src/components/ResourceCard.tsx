@@ -15,6 +15,9 @@ const typeIcon: Record<string, typeof FileText> = {
 
 export function ResourceCard({ resource, course }: { resource: Resource; course: Course }) {
   const Icon = typeIcon[resource.type] ?? FileText;
+  const isMTH201 = (course.code || '').toUpperCase().replace(/\s+/g, '') === 'MTH201' || (course.title || '').toLowerCase().includes('mathematical method');
+  const is100L = resource.level === '100' || (course.code || '').match(/^[A-Z]+\s*1/i);
+
   return (
     <Link to={`/materials/${resource.id}`} className="block group h-full">
       <Card className="h-full p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-pop hover:border-teal-200">
@@ -23,6 +26,8 @@ export function ResourceCard({ resource, course }: { resource: Resource; course:
             <Icon className="h-5 w-5" />
           </div>
           <div className="flex flex-wrap justify-end gap-1.5">
+            {isMTH201 && <Badge tone="amber">🔥 Pass-Booster</Badge>}
+            {is100L && !isMTH201 && <Badge tone="green">✨ 100L Foundation</Badge>}
             <Badge tone="teal">{resource.type}</Badge>
           </div>
         </div>

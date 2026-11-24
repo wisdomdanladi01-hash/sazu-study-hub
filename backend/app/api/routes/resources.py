@@ -314,6 +314,7 @@ def stream_preview_file(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found.")
 
     user = _get_optional_user(credentials, db)
+    is_admin = _is_admin(db, user) if user else False
     policy = resource.preview_policy or "none"
 
     if policy == "authenticated_only" and user is None:
@@ -323,18 +324,17 @@ def stream_preview_file(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # The full original may only be streamed here if it is genuinely free (public, no
-    # verification needed). Everyone else must use the secure viewer, which watermarks
-    # pages and never exposes the source file.
+    # The full original may only be streamed here if it is genuinely free or admin preview.
+    # Everyone else must use the secure viewer, which watermarks pages.
     public_open = resource.access_policy == "public" and not resource.requires_verification
-    if not public_open:
+    if not (public_open or is_admin):
         if user is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Sign in to view this file.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        if not (_is_admin(db, user) or can_download_resource(db, user, resource)):
+        if not can_download_resource(db, user, resource):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Full file access is restricted. Open the material in the secure viewer with an active subscription.",

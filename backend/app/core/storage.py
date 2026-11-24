@@ -127,6 +127,8 @@ class LocalPrivateStorageProvider(StorageProvider):
         target = Path(settings.private_storage_dir)
         try:
             root = target.resolve()
+            if root.exists():
+                return root
             root.mkdir(parents=True, exist_ok=True)
             # Verify write permissions
             probe = root / f".probe_{uuid4().hex}"
@@ -134,9 +136,21 @@ class LocalPrivateStorageProvider(StorageProvider):
             probe.unlink()
             return root
         except OSError:
-            fallback = (Path(tempfile.gettempdir()) / "private_storage").resolve()
-            fallback.mkdir(parents=True, exist_ok=True)
-            return fallback
+            pass
+
+        # Try relative to the backend package root
+        backend_root = (Path(__file__).resolve().parent.parent.parent / "private_storage").resolve()
+        if backend_root.exists():
+            return backend_root
+        try:
+            backend_root.mkdir(parents=True, exist_ok=True)
+            return backend_root
+        except OSError:
+            pass
+
+        fallback = (Path(tempfile.gettempdir()) / "private_storage").resolve()
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback
 
     def store_file(
         self,
@@ -174,12 +188,17 @@ class LocalPrivateStorageProvider(StorageProvider):
     def resolve_local_path(self, storage_key: str) -> Path:
         root = self._root()
         path = (root / storage_key).resolve()
-        if path.is_relative_to(root) and path.is_file():
+        if path.is_file():
             return path
+        # Check backend package root if configured root differs
+        backend_root = (Path(__file__).resolve().parent.parent.parent / "private_storage").resolve()
+        backend_path = (backend_root / storage_key).resolve()
+        if backend_path.is_file():
+            return backend_path
         # Check fallback temp root if configured root differs
         temp_root = (Path(tempfile.gettempdir()) / "private_storage").resolve()
         fallback_path = (temp_root / storage_key).resolve()
-        if fallback_path.is_relative_to(temp_root) and fallback_path.is_file():
+        if fallback_path.is_file():
             return fallback_path
         raise FileNotFoundError(f"Storage object '{storage_key}' not found.")
 

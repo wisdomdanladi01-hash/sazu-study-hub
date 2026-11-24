@@ -28,6 +28,7 @@ import {
   Check,
   FileCode,
   Image as ImageIcon,
+  GraduationCap,
   Sparkles,
 } from 'lucide-react';
 import { formatRelative } from '@/utils/format';
@@ -394,6 +395,43 @@ export function ResourceDetailPage() {
             <p className="mt-3 text-xs text-ink-500 italic">{resource.authorTag}</p>
           )}
 
+          {/* Pedagogical Advisory for MTH201 or 100-Level */}
+          {((resource.course.code || '').toUpperCase().replace(/\s+/g, '') === 'MTH201' || (resource.course.title || '').toLowerCase().includes('mathematical method')) && (
+            <Card className="mt-5 p-4 sm:p-5 border-amber-300 bg-linear-to-r from-amber-50/80 via-white to-amber-50/40">
+              <div className="flex items-start gap-3">
+                <span className="p-2 rounded-xl bg-amber-100 text-amber-800 shrink-0">
+                  <Sparkles className="h-5 w-5" />
+                </span>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-amber-950">
+                    Crucial Pass-Booster: MTH201 Mathematical Method I
+                  </h3>
+                  <p className="text-xs text-amber-900 leading-relaxed">
+                    MTH201 is historically recognized as one of the most demanding courses at 200 Level with a high failure rate across Science and Computing departments. Studying these verified continuous assessment questions, past examinations, and step-by-step worked solutions significantly boosts your problem-solving accuracy and exam pass rate.
+                  </p>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {(resource.level === '100' || (resource.course.code || '').match(/^[A-Z]+\s*1/i)) && ((resource.course.code || '').toUpperCase().replace(/\s+/g, '') !== 'MTH201') && (
+            <Card className="mt-5 p-4 sm:p-5 border-teal-200 bg-linear-to-r from-teal-50/70 via-white to-teal-50/30">
+              <div className="flex items-start gap-3">
+                <span className="p-2 rounded-xl bg-teal-100 text-teal-800 shrink-0">
+                  <GraduationCap className="h-5 w-5" />
+                </span>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-teal-950">
+                    First-Year Academic Gateway: Build Your CGPA Foundation Early
+                  </h3>
+                  <p className="text-xs text-teal-900 leading-relaxed">
+                    First-year academic performance establishes the foundation for your cumulative GPA (CGPA). Mastering this 100-level course with verified past questions and marking guides protects your academic standing early and sets you up for honors classification.
+                  </p>
+                </div>
+              </div>
+            </Card>
+          )}
+
           {/* Real Preview Section */}
           <section className="mt-7">
             <div className="flex items-center gap-2 mb-3">
@@ -424,7 +462,9 @@ export function ResourceDetailPage() {
             <h3 className="font-display font-bold text-ink-950">Access this resource</h3>
             <p className="mt-1 text-sm text-ink-600">
               {profile
-                ? profile.hasSubscription
+                ? profile.isAdmin
+                  ? 'Administrator account recognized. Full watermarked viewer preview is authorized.'
+                  : profile.hasSubscription
                   ? 'Your semester subscription is active. You can read the full material.'
                   : "You're signed in. Add a semester subscription to unlock the full material."
                 : 'Sign in to unlock the full material. A semester subscription may also be required.'}
@@ -432,11 +472,11 @@ export function ResourceDetailPage() {
             <div className="mt-4 space-y-2.5">
               <Button
                 fullWidth
-                variant="outline"
+                variant={profile?.isAdmin || profile?.hasSubscription ? 'primary' : 'outline'}
                 onClick={handleOpen}
                 leftIcon={<Eye className="h-4 w-4" />}
               >
-                Open material
+                {profile?.isAdmin ? 'Open in Reader (Admin Preview)' : 'Open material'}
               </Button>
               <Link to={`/practice?course=${encodeURIComponent(resource.course.code)}`}>
                 <Button fullWidth variant="ghost" leftIcon={<ListChecks className="h-4 w-4" />}>

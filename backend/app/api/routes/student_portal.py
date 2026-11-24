@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user
@@ -452,11 +452,59 @@ def academic_catalogue(db: Session = Depends(get_db)) -> dict[str, Any]:
     }
 
 
+def sync_student_academic_level_progression(db: Session, user_id: int) -> StudentAcademicProfile | None:
+    """Automatically progress a student's academic level when a new session becomes active.
+
+    E.g. a 300L student in 2024/2025 advances to 400L when 2025/2026 is active.
+    """
+    profile = db.scalar(
+        select(StudentAcademicProfile).where(StudentAcademicProfile.user_id == user_id)
+    )
+    if not profile or not profile.verified_level_id:
+        return profile
+
+    active_session = db.scalar(
+        select(AcademicSession).where(AcademicSession.is_active.is_(True)).limit(1)
+    )
+    if not active_session:
+        return profile
+
+    if not profile.verified_session_id:
+        profile.verified_session_id = profile.admission_session_id or active_session.id
+        db.commit()
+        db.refresh(profile)
+        return profile
+
+    if profile.verified_session_id != active_session.id:
+        verified_session = db.get(AcademicSession, profile.verified_session_id)
+        if verified_session and active_session.starts_on > verified_session.starts_on:
+            diff_count = db.scalar(
+                select(func.count(AcademicSession.id)).where(
+                    AcademicSession.starts_on > verified_session.starts_on,
+                    AcademicSession.starts_on <= active_session.starts_on,
+                )
+            ) or 1
+
+            current_level = db.get(AcademicLevel, profile.verified_level_id)
+            if current_level:
+                all_levels = list(db.scalars(select(AcademicLevel).order_by(AcademicLevel.sort_order.asc())))
+                target_sort = current_level.sort_order + diff_count
+                next_level = next((lvl for lvl in all_levels if lvl.sort_order == target_sort), all_levels[-1] if all_levels else None)
+                if next_level and next_level.id != profile.verified_level_id:
+                    profile.verified_level_id = next_level.id
+                    profile.verified_session_id = active_session.id
+                    profile.updated_at = datetime.now(timezone.utc)
+                    db.commit()
+                    db.refresh(profile)
+    return profile
+
+
 @router.get("/dashboard")
 def student_dashboard(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    academic_profile = sync_student_academic_level_progression(db, user.id)
     subscriptions = get_user_subscriptions(db, user.id)
     latest_subscription = subscriptions[0] if subscriptions else None
     package = (
@@ -474,9 +522,6 @@ def student_dashboard(
         .where(VerificationSubmission.user_id == user.id)
         .order_by(VerificationSubmission.created_at.desc(), VerificationSubmission.id.desc())
         .limit(1)
-    )
-    academic_profile = db.scalar(
-        select(StudentAcademicProfile).where(StudentAcademicProfile.user_id == user.id)
     )
     recent_payment = db.scalar(
         select(Payment)

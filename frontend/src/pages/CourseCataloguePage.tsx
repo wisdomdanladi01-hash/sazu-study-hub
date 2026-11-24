@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BookOpen, Search } from 'lucide-react';
+import { ArrowRight, BookOpen, GraduationCap, Search } from 'lucide-react';
 import { Alert } from '@/components/ui/Alert';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -62,6 +62,26 @@ export function CourseCataloguePage() {
           Browse the course offerings currently listed for SAZU. Course sheets supplied for this directory are marked as unverified until confirmed against official records.
         </p>
       </header>
+
+      {/* 100L Gateway Foundation Spotlight Banner */}
+      <Card className="mb-6 border-teal-200 bg-linear-to-r from-teal-50/70 via-white to-emerald-50/40 p-5 sm:p-6 shadow-xs">
+        <div className="flex flex-col sm:flex-row items-start gap-4">
+          <div className="p-3 rounded-2xl bg-teal-100 text-teal-800 shrink-0 shadow-2xs">
+            <GraduationCap className="h-6 w-6" />
+          </div>
+          <div className="space-y-1.5 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="font-display text-base sm:text-lg font-bold text-ink-950">
+                100-Level Academic Gateway: Build Your CGPA Foundation Early
+              </h2>
+              <Badge tone="teal">Crucial for Newcomers</Badge>
+            </div>
+            <p className="text-xs sm:text-sm text-ink-700 leading-relaxed max-w-4xl">
+              Your 100-Level grades establish the benchmark for your graduating Cumulative GPA (CGPA). Mastering early foundational sciences, general university requirements, and departmental introductory courses creates the stability needed for honors graduation. Verified Continuous Assessment (C.A.) test papers and worked marking guides are highlighted below to help first-year students study ahead and pass with distinction.
+            </p>
+          </div>
+        </div>
+      </Card>
 
       <Card className="mb-6 p-4 sm:p-5">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -160,10 +180,21 @@ export function CourseCataloguePage() {
 function CourseOfferingCard({ course, offering }: OfferingRow) {
   const isUnverified = offering.verification_status !== 'verified';
   const coverage = course.coverage;
+  const isMTH201 = course.code.toUpperCase().replace(/\s+/g, '') === 'MTH201' || course.title.toLowerCase().includes('mathematical method');
+  const is100L = offering.level === '100' || course.code.match(/^[A-Z]+\s*1/i);
+
   return (
     <Card className="flex h-full flex-col p-5 transition-shadow hover:shadow-pop">
       <div className="flex items-start justify-between gap-3">
-        <span className="rounded-lg bg-ink-50 px-2.5 py-1 font-mono text-xs font-bold text-ink-700">{course.code}</span>
+        <div className="flex items-center gap-2">
+          <span className="rounded-lg bg-ink-50 px-2.5 py-1 font-mono text-xs font-bold text-ink-700">{course.code}</span>
+          {isMTH201 && (
+            <Badge tone="amber">🔥 High-Impact Core</Badge>
+          )}
+          {is100L && !isMTH201 && (
+            <Badge tone="teal">✨ 100L Foundation</Badge>
+          )}
+        </div>
         <Badge tone={isUnverified ? 'amber' : 'green'}>
           {isUnverified ? 'Unverified listing' : 'Verified'}
         </Badge>
@@ -177,6 +208,26 @@ function CourseOfferingCard({ course, offering }: OfferingRow) {
         {offering.credit_units != null && <Badge tone="teal">{offering.credit_units} units</Badge>}
         {offering.course_type && <Badge tone="neutral">{offering.course_type}</Badge>}
       </div>
+
+      {isMTH201 && (
+        <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50/70 p-3 text-xs">
+          <div className="flex items-center gap-1.5 font-bold text-amber-950 mb-1">
+            <span className="text-amber-600">🔥</span> Crucial Core Course · Historically Demanding
+          </div>
+          <p className="text-[11px] text-amber-900 leading-relaxed">
+            Many students find MTH201 challenging. Having verified past test questions and step-by-step marking guides significantly improves pass rates.
+          </p>
+        </div>
+      )}
+
+      {is100L && !isMTH201 && (
+        <div className="mt-3 rounded-xl border border-teal-200 bg-teal-50/60 p-2.5 text-xs">
+          <div className="flex items-center gap-1.5 font-semibold text-teal-950">
+            <GraduationCap className="h-3.5 w-3.5 text-teal-700 shrink-0" />
+            <span>First-Year Success Gateway: Essential for a stable CGPA.</span>
+          </div>
+        </div>
+      )}
 
       {coverage && (
         <div className="mt-4 rounded-xl border border-ink-100 bg-ink-50/60 p-3">

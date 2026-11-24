@@ -2,7 +2,8 @@
 .env
 .env.*
 !.env.example
-private_storage/
+# private_storage is committed so seed past questions and course documents deploy to serverless environments
+# private_storage/
 __pycache__/
 *.pyc
 .pytest_cache/

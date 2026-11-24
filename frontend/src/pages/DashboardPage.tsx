@@ -119,7 +119,7 @@ export function DashboardPage() {
 
   const hasSubscription = dashboard?.subscription?.is_active ?? profile.hasSubscription;
   const expiry = dashboard?.subscription?.ends_at ?? profile.subscriptionExpiresAt;
-  const emailVerified = Boolean(profile.emailVerified ?? dashboard?.user?.email_verified);
+  const emailVerified = Boolean(dashboard?.user?.email_verified || profile.emailVerified);
   const verificationStatus = dashboard?.verification.status ?? profile.verificationStatus ?? 'not_submitted';
   const isFullyVerified = emailVerified && verificationStatus === 'approved';
   const avatarUrl = profile.avatarUrl ?? dashboard?.user?.avatar_url ?? null;

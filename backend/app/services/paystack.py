@@ -53,7 +53,11 @@ def _request(method: str, path: str, *, json: dict | None = None) -> dict:
             method,
             url,
             json=json,
-            headers={"Authorization": f"Bearer {secret}", "Content-Type": "application/json"},
+            headers={
+                "Authorization": f"Bearer {secret}",
+                "Content-Type": "application/json",
+                "User-Agent": "SAZU-StudyHub/1.0 (https://sazu.edu.ng)",
+            },
             timeout=settings.paystack_timeout_seconds,
         )
         response.raise_for_status()

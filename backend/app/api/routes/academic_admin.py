@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -21,6 +21,7 @@ from app.models.academic import (
     Institution,
     Programme,
     Semester,
+    StudentAcademicProfile,
 )
 from app.models.audit import AuditEvent
 from app.models.user import User
@@ -1235,4 +1236,84 @@ def admin_delete_semester(
         )
     )
     db.commit()
+
+
+@router.post("/sessions/promote-students")
+def admin_promote_students_to_next_level(
+    target_session_id: int | None = None,
+    admin: User = Depends(require_capability("manage_academic_catalogue")),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Bulk advance verified students whose verified session is older than target/active session."""
+    if target_session_id:
+        target_session = db.get(AcademicSession, target_session_id)
+        if not target_session:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target session not found.")
+    else:
+        target_session = db.scalar(select(AcademicSession).where(AcademicSession.is_active == True))
+        if not target_session:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No active academic session found. Set an active session first.")
+
+    profiles = list(db.scalars(
+        select(StudentAcademicProfile).where(
+            StudentAcademicProfile.verified_level_id.is_not(None)
+        )
+    ))
+
+    all_levels = list(db.scalars(select(AcademicLevel).order_by(AcademicLevel.sort_order.asc())))
+    level_map = {lvl.id: lvl for lvl in all_levels}
+    max_level = all_levels[-1] if all_levels else None
+
+    promoted_details = []
+    for p in profiles:
+        curr_lvl = level_map.get(p.verified_level_id)
+        if not curr_lvl:
+            continue
+
+        verified_session = db.get(AcademicSession, p.verified_session_id) if p.verified_session_id else None
+        if verified_session and verified_session.starts_on >= target_session.starts_on:
+            continue
+
+        if verified_session:
+            diff = db.scalar(
+                select(func.count(AcademicSession.id)).where(
+                    AcademicSession.starts_on > verified_session.starts_on,
+                    AcademicSession.starts_on <= target_session.starts_on,
+                )
+            ) or 1
+        else:
+            diff = 1
+
+        target_sort = curr_lvl.sort_order + diff
+        next_lvl = next((lvl for lvl in all_levels if lvl.sort_order == target_sort), max_level)
+        if next_lvl and next_lvl.id != p.verified_level_id:
+            old_name = curr_lvl.name
+            p.verified_level_id = next_lvl.id
+            p.verified_session_id = target_session.id
+            p.updated_at = datetime.now(timezone.utc)
+            student_user = db.get(User, p.user_id)
+            promoted_details.append({
+                "student_id": p.user_id,
+                "student_name": student_user.full_name if student_user else f"Student #{p.user_id}",
+                "from_level": old_name,
+                "to_level": next_lvl.name,
+                "session": target_session.name,
+            })
+
+    db.add(
+        AuditEvent(
+            actor_user_id=admin.id,
+            action="admin.students_promoted_to_next_level",
+            target_type="academic_session",
+            target_id=str(target_session.id),
+            event_metadata={"promoted_count": len(promoted_details)},
+        )
+    )
+    db.commit()
+
+    return {
+        "promoted_count": len(promoted_details),
+        "active_session_name": target_session.name,
+        "details": promoted_details,
+    }
 
