@@ -26,6 +26,12 @@ interface ApiDashboard {
     department_id: number | null;
     verified_level_id: number | null;
     verified_session_id: number | null;
+    matriculation_number?: string | null;
+  } | null;
+  verification?: {
+    status: string;
+    submitted_at?: string | null;
+    decision_reason?: string | null;
   } | null;
   subscription: {
     status: string;
@@ -92,6 +98,8 @@ function mapProfile(user: ApiUser, dashboard: ApiDashboard): StudentProfile {
     permissions: user.permissions || [],
     isSuperuser: Boolean(user.is_superuser),
     emailVerified: Boolean(user.email_verified),
+    verificationStatus: dashboard.verification?.status || 'not_submitted',
+    matriculationNumber: academic?.matriculation_number || null,
   };
 }
 

@@ -294,3 +294,63 @@ def test_entitlement_only_resource_requires_successful_matching_purchase(
     )
     assert allowed.status_code == 200
     assert allowed.content == b"%PDF-1.7 purchased"
+
+
+def test_advanced_resource_search_mechanism(client, db_session):
+    """Test searching for materials with spaceless, spaced, and fuzzy course codes."""
+    from app.models.academic import Course, Department, Faculty, Institution
+
+    inst = Institution(name="Sa'adu Zungur University", code="SAZU")
+    db_session.add(inst)
+    db_session.flush()
+    fac = Faculty(name="Faculty of Science", code="FSC", institution_id=inst.id)
+    db_session.add(fac)
+    db_session.flush()
+    dept = Department(name="Biological Sciences", code="BIO", faculty_id=fac.id)
+    db_session.add(dept)
+    db_session.flush()
+    course = Course(
+        department_id=dept.id,
+        code="BIO101",
+        title="Introductory Biology",
+        is_active=True,
+    )
+    db_session.add(course)
+    db_session.commit()
+
+    admin, admin_token = create_admin(db_session)
+    upload = client.post(
+        "/api/v1/admin/resources",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        data={
+            "title": "General Cell Biology Notes",
+            "is_published": "true",
+            "course_id": str(course.id),
+            "access_policy": "public",
+        },
+        files={"upload": ("bio101_notes.pdf", b"%PDF-1.7 biology", "application/pdf")},
+    )
+    assert upload.status_code == 201, upload.text
+    res_id = upload.json()["id"]
+
+    # 1. Search with space "bio 101" matches course code BIO101
+    res1 = client.get("/api/v1/resources?search=bio 101")
+    assert res1.status_code == 200, res1.text
+    data1 = res1.json()
+    items1 = data1.get("items", data1 if isinstance(data1, list) else [])
+    assert any(item["id"] == res_id for item in items1)
+
+    # 2. Search without space "BIO101" matches
+    res2 = client.get("/api/v1/resources?search=BIO101")
+    assert res2.status_code == 200
+    data2 = res2.json()
+    items2 = data2.get("items", data2 if isinstance(data2, list) else [])
+    assert any(item["id"] == res_id for item in items2)
+
+    # 3. Multi-term search "biology 101" matches course title + code
+    res3 = client.get("/api/v1/resources?search=biology 101")
+    assert res3.status_code == 200
+    data3 = res3.json()
+    items3 = data3.get("items", data3 if isinstance(data3, list) else [])
+    assert any(item["id"] == res_id for item in items3)
+

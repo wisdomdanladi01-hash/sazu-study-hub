@@ -51,7 +51,12 @@ def get_package_target_name(db: Session, package: AccessPackage) -> str:
         return f"Academic Session {sess.name}" if sess else f"Session {package.academic_session_id}"
     elif package.package_type == "level" and package.academic_level_id:
         lvl = db.get(AcademicLevel, package.academic_level_id)
-        return f"{lvl.name} Level Pass" if lvl else f"Level {package.academic_level_id}"
+        if lvl:
+            lvl_name = lvl.name.strip()
+            if "level" in lvl_name.lower():
+                return f"{lvl_name} Pass"
+            return f"{lvl_name} Level Pass"
+        return f"Level {package.academic_level_id}"
     elif package.package_type == "course" and package.course_id:
         course = db.get(Course, package.course_id)
         return f"{course.code} - {course.title}" if course else f"Course {package.course_id}"

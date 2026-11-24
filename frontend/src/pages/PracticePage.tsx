@@ -33,11 +33,24 @@ export function PracticePage() {
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return items;
-    return items.filter((item) =>
-      [item.title, item.course.code, item.course.title, item.description ?? ''].some((value) =>
-        value.toLowerCase().includes(q.replace(/\s+/g, '')) || value.toLowerCase().includes(q),
-      ),
-    );
+    const cleanQ = q.replace(/[^a-z0-9]/gi, '');
+    const tokens = q.split(/[\s\-_]+/).filter(Boolean);
+
+    return items.filter((item) => {
+      const candidates = [
+        item.title,
+        item.course.code,
+        item.course.title,
+        item.description ?? '',
+      ].map((str) => str.toLowerCase());
+      const cleanCandidates = candidates.map((str) => str.replace(/[^a-z0-9]/gi, ''));
+
+      if (candidates.some((c) => c.includes(q))) return true;
+      if (cleanQ && cleanCandidates.some((cc) => cc.includes(cleanQ))) return true;
+      if (tokens.length > 1 && tokens.every((tok) => candidates.some((c) => c.includes(tok)))) return true;
+
+      return false;
+    });
   }, [items, query]);
 
   return (

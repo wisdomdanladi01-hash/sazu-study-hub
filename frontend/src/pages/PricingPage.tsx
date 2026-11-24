@@ -304,14 +304,16 @@ export function PricingPage() {
                     >
                       <div>
                         <div className="flex items-center justify-between gap-2 mb-2">
-                          <Badge tone="teal">Level Pass</Badge>
+                          <Badge tone="teal">Cross-Level</Badge>
                           {pkg.target_name && (
                             <span className="text-xs font-mono font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
-                              {pkg.target_name}
+                              {pkg.target_name.replace(/Level\s+Level/gi, 'Level')}
                             </span>
                           )}
                         </div>
-                        <h3 className="font-display text-lg font-bold text-ink-950">{pkg.name}</h3>
+                        <h3 className="font-display text-lg font-bold text-ink-950">
+                          {pkg.name.replace(/Level\s+Level/gi, 'Level')}
+                        </h3>
 
                         <div className="my-3">
                           <div className="flex items-baseline gap-2">

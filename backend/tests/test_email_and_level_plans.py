@@ -168,7 +168,7 @@ def test_level_package_and_subscriber_discount(client: TestClient, db_session):
     assert pkg_data["package_type"] == "level"
     assert pkg_data["price_minor"] == 200000
     assert pkg_data["subscriber_price_minor"] == 100000
-    assert pkg_data["target_name"] == "300 Level Level Pass"
+    assert pkg_data["target_name"] == "300 Level Pass"
     pkg_id = pkg_data["id"]
 
     # 2. Edit package

@@ -91,6 +91,8 @@ export interface StudentProfile {
   permissions?: string[];
   isSuperuser?: boolean;
   emailVerified?: boolean;
+  verificationStatus?: string | null;
+  matriculationNumber?: string | null;
 }
 
 export interface AcademicCatalogue {

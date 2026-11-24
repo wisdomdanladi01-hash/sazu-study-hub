@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import exists, or_, select
+from sqlalchemy import and_, exists, or_, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -227,14 +228,46 @@ def list_resources(
             or_(Resource.available_from.is_(None), Resource.available_from <= now),
             or_(Resource.available_until.is_(None), Resource.available_until > now),
         )
-    if search:
-        query = query.where(
-            or_(
-                Resource.title.ilike(f"%{search.strip()}%"),
-                Resource.description.ilike(f"%{search.strip()}%"),
-                Resource.file_name.ilike(f"%{search.strip()}%"),
+    if search and search.strip():
+        raw_s = search.strip()
+        spaceless_s = re.sub(r"\s+", "", raw_s)
+        spaced_s = re.sub(r"([a-zA-Z]+)(\d+)", r"\1 \2", raw_s)
+        tokens = [t for t in re.split(r"[\s\-_]+", raw_s) if t]
+
+        search_terms = {raw_s, spaceless_s, spaced_s}
+
+        term_conditions = []
+        for term in search_terms:
+            term_conditions.extend([
+                Resource.title.ilike(f"%{term}%"),
+                Resource.description.ilike(f"%{term}%"),
+                Resource.file_name.ilike(f"%{term}%"),
+                Course.code.ilike(f"%{term}%"),
+                Course.title.ilike(f"%{term}%"),
+            ])
+
+        if len(tokens) > 1:
+            token_and_clauses = []
+            for tok in tokens:
+                token_and_clauses.append(
+                    or_(
+                        Resource.title.ilike(f"%{tok}%"),
+                        Resource.description.ilike(f"%{tok}%"),
+                        Resource.file_name.ilike(f"%{tok}%"),
+                        Course.code.ilike(f"%{tok}%"),
+                        Course.title.ilike(f"%{tok}%"),
+                    )
+                )
+            query = query.outerjoin(Course, Resource.course_id == Course.id).where(
+                or_(
+                    or_(*term_conditions),
+                    and_(*token_and_clauses),
+                )
             )
-        )
+        else:
+            query = query.outerjoin(Course, Resource.course_id == Course.id).where(
+                or_(*term_conditions)
+            )
     if category_id is not None:
         query = query.where(Resource.category_id == category_id)
     if course_id is not None:

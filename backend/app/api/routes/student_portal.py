@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
+import re
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user
@@ -103,7 +104,7 @@ def _resource_is_available(resource: Resource) -> bool:
 
 
 def _public_resource_data(db: Session, resource: Resource) -> dict[str, Any]:
-    category = db.get(ResourceCategory, resource.category_id)
+    category = db.get(ResourceCategory, resource.category_id) if resource.category_id is not None else None
     resource_type = (
         db.get(ResourceType, resource.resource_type_id)
         if resource.resource_type_id is not None
@@ -205,18 +206,45 @@ def list_resources(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     query = select(Resource).where(Resource.is_published.is_(True))
-    if search:
-        term = f"%{search.strip()}%"
-        matching_course = select(Course.id).where(
-            Course.id == Resource.course_id,
-            Course.code.ilike(term) | Course.title.ilike(term),
-        )
-        query = query.where(
-            Resource.title.ilike(term)
-            | Resource.description.ilike(term)
-            | Resource.file_name.ilike(term)
-            | matching_course.exists()
-        )
+    if search and search.strip():
+        raw_s = search.strip()
+        spaceless_s = re.sub(r"\s+", "", raw_s)
+        spaced_s = re.sub(r"([a-zA-Z]+)(\d+)", r"\1 \2", raw_s)
+        tokens = [t for t in re.split(r"[\s\-_]+", raw_s) if t]
+
+        search_terms = {raw_s, spaceless_s, spaced_s}
+
+        conds = []
+        for term in search_terms:
+            t_pat = f"%{term}%"
+            matching_course = select(Course.id).where(
+                Course.id == Resource.course_id,
+                Course.code.ilike(t_pat) | Course.title.ilike(t_pat),
+            )
+            conds.append(
+                Resource.title.ilike(t_pat)
+                | Resource.description.ilike(t_pat)
+                | Resource.file_name.ilike(t_pat)
+                | matching_course.exists()
+            )
+
+        if len(tokens) > 1:
+            token_and_clauses = []
+            for tok in tokens:
+                tok_pat = f"%{tok}%"
+                tok_course = select(Course.id).where(
+                    Course.id == Resource.course_id,
+                    Course.code.ilike(tok_pat) | Course.title.ilike(tok_pat),
+                )
+                token_and_clauses.append(
+                    Resource.title.ilike(tok_pat)
+                    | Resource.description.ilike(tok_pat)
+                    | Resource.file_name.ilike(tok_pat)
+                    | tok_course.exists()
+                )
+            query = query.where(or_(*conds) | and_(*token_and_clauses))
+        else:
+            query = query.where(or_(*conds))
     if resource_type:
         query = query.join(ResourceType, Resource.resource_type_id == ResourceType.id).where(
             ResourceType.name.ilike(f"%{resource_type.strip()}%")
@@ -474,7 +502,10 @@ def student_dashboard(
             "id": user.id,
             "email": user.email,
             "full_name": user.full_name,
+            "nickname": user.nickname,
+            "avatar_url": user.avatar_url,
             "is_active": user.is_active,
+            "email_verified": user.email_verified,
         },
         "academic_profile": (
             {
