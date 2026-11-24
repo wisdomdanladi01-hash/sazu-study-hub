@@ -184,6 +184,9 @@ export interface AdminOverview {
     total_packages: number;
     total_payments: number;
     succeeded_payments: number;
+    total_students?: number;
+    verified_students?: number;
+    total_revenue_minor?: number;
   };
   recent_resources: Array<{
     id: number;
@@ -201,6 +204,25 @@ export interface AdminOverview {
     status: string;
     matriculation_number: string | null;
     jamb_registration_number: string | null;
+    created_at: string;
+  }>;
+  recent_students?: Array<{
+    id: number;
+    full_name: string;
+    email: string;
+    nickname?: string | null;
+    avatar_url?: string | null;
+    email_verified: boolean;
+    created_at: string;
+  }>;
+  recent_payments?: Array<{
+    id: number;
+    reference: string;
+    amount_minor: number;
+    currency: string;
+    status: string;
+    channel?: string | null;
+    customer_email?: string | null;
     created_at: string;
   }>;
 }

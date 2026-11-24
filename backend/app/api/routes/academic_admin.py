@@ -702,6 +702,15 @@ def admin_overview(
     succeeded_payments = db.scalar(
         select(func.count(Payment.id)).where(Payment.status == "succeeded")
     ) or 0
+    total_revenue_minor = db.scalar(
+        select(func.coalesce(func.sum(Payment.amount_minor), 0)).where(Payment.status == "succeeded")
+    ) or 0
+    total_students = db.scalar(
+        select(func.count(User.id)).where(User.is_superuser.is_(False))
+    ) or 0
+    verified_students = db.scalar(
+        select(func.count(User.id)).where(User.is_superuser.is_(False), User.email_verified.is_(True))
+    ) or 0
 
     recent_resources = db.scalars(
         select(Resource).order_by(Resource.created_at.desc(), Resource.id.desc()).limit(5)
@@ -709,6 +718,14 @@ def admin_overview(
 
     recent_submissions = db.scalars(
         select(VerificationSubmission).order_by(VerificationSubmission.created_at.desc(), VerificationSubmission.id.desc()).limit(5)
+    ).all()
+
+    recent_students = db.scalars(
+        select(User).where(User.is_superuser.is_(False)).order_by(User.created_at.desc(), User.id.desc()).limit(5)
+    ).all()
+
+    recent_payments = db.scalars(
+        select(Payment).where(Payment.status == "succeeded").order_by(Payment.created_at.desc(), Payment.id.desc()).limit(5)
     ).all()
 
     return {
@@ -726,6 +743,9 @@ def admin_overview(
             "total_packages": total_packages,
             "total_payments": total_payments,
             "succeeded_payments": succeeded_payments,
+            "total_revenue_minor": total_revenue_minor,
+            "total_students": total_students,
+            "verified_students": verified_students,
         },
         "recent_resources": [
             {
@@ -750,6 +770,31 @@ def admin_overview(
                 "created_at": s.created_at.isoformat(),
             }
             for s in recent_submissions
+        ],
+        "recent_students": [
+            {
+                "id": u.id,
+                "full_name": u.full_name,
+                "email": u.email,
+                "nickname": u.nickname,
+                "avatar_url": u.avatar_url,
+                "email_verified": u.email_verified,
+                "created_at": u.created_at.isoformat() if u.created_at else "",
+            }
+            for u in recent_students
+        ],
+        "recent_payments": [
+            {
+                "id": p.id,
+                "reference": p.paystack_reference or f"PAY-{p.id}",
+                "amount_minor": p.amount_minor,
+                "currency": p.currency,
+                "status": p.status,
+                "channel": p.channel,
+                "customer_email": p.customer_email,
+                "created_at": p.created_at.isoformat() if p.created_at else "",
+            }
+            for p in recent_payments
         ],
     }
 

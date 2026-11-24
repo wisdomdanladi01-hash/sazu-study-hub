@@ -140,7 +140,8 @@ export function AdminCsvImportPage() {
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
-          className={`border-2 border-dashed rounded-2xl p-8 text-center transition-colors ${dragOver ? 'border-teal-500 bg-teal-50/50' : 'border-ink-200 bg-ink-50/50 hover:border-ink-300'
+          onClick={() => fileInputRef.current?.click()}
+          className={`border-2 border-dashed rounded-2xl p-8 text-center transition-colors cursor-pointer ${dragOver ? 'border-teal-500 bg-teal-50/50' : 'border-ink-200 bg-ink-50/50 hover:border-teal-400'
             }`}
         >
           <input
@@ -158,17 +159,33 @@ export function AdminCsvImportPage() {
             {file ? file.name : 'Choose a CSV file or drag and drop here'}
           </h2>
           <p className="mt-1 text-xs text-ink-500">
-            {file ? `${(file.size / 1024).toFixed(1)} KB` : 'UTF-8 encoded CSV up to 2 MB (maximum 2,000 rows)'}
+            {file ? `${(file.size / 1024).toFixed(1)} KB` : 'UTF-8 encoded CSV up to 2 MB (maximum 2,000 rows). Click anywhere in this box to choose.'}
           </p>
 
           <div className="mt-5 flex justify-center gap-3">
-            <label htmlFor="csv-file-input">
-              <Button type="button" size="sm" variant="outline" leftIcon={<FileSpreadsheet className="h-4 w-4" />}>
-                {file ? 'Change file' : 'Select file'}
-              </Button>
-            </label>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={(e) => {
+                e.stopPropagation();
+                fileInputRef.current?.click();
+              }}
+              leftIcon={<FileSpreadsheet className="h-4 w-4" />}
+            >
+              {file ? 'Change file' : 'Select file'}
+            </Button>
             {file && (
-              <Button type="button" size="sm" onClick={handleImport} loading={uploading} leftIcon={<Upload className="h-4 w-4" />}>
+              <Button
+                type="button"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleImport();
+                }}
+                loading={uploading}
+                leftIcon={<Upload className="h-4 w-4" />}
+              >
                 Submit import
               </Button>
             )}

@@ -354,6 +354,7 @@ function UploadResourceModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const uploadInputRef = useRef<HTMLInputElement>(null);
   // Section A: Academic Identification
   const [facultyId, setFacultyId] = useState('');
   const [departmentId, setDepartmentId] = useState('');
@@ -715,7 +716,7 @@ function UploadResourceModal({
           </div>
 
           <div
-            onClick={() => document.getElementById('resource-files-input')?.click()}
+            onClick={() => uploadInputRef.current?.click()}
             onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={(e) => {
@@ -729,10 +730,14 @@ function UploadResourceModal({
           >
             <input
               type="file"
+              ref={uploadInputRef}
               id="resource-files-input"
               multiple
               accept=".pdf,image/jpeg,image/png,image/webp"
-              onChange={(e) => { if (e.target.files) addFiles(e.target.files); }}
+              onChange={(e) => {
+                if (e.target.files) addFiles(e.target.files);
+                e.target.value = '';
+              }}
               className="hidden"
             />
             <div className="flex flex-col items-center justify-center gap-2">
@@ -748,7 +753,7 @@ function UploadResourceModal({
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
-                  document.getElementById('resource-files-input')?.click();
+                  uploadInputRef.current?.click();
                 }}
                 leftIcon={<Upload className="h-3.5 w-3.5" />}
               >
