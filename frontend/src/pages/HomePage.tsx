@@ -8,6 +8,7 @@ import { catalogService } from '@/services/catalog';
 import type { AcademicCatalogue } from '@/types';
 import type { CatalogResource } from '@/services/catalog';
 import { paymentService, type SubscriptionPackage } from '@/services/payments';
+import { AcademicGatewayMatrix } from '@/components/AcademicGatewayMatrix';
 import { Search, ArrowRight, BookOpen, ListChecks, FileText, FileQuestion, GraduationCap, ClipboardList, ShieldCheck, CreditCard, Eye, ChevronRight, Sparkles, Star, CheckCircle2 } from 'lucide-react';
 import { formatNaira } from '@/utils/format';
 
@@ -185,67 +186,8 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* 100-Level Foundation & MTH 201 Academic Hub */}
-      <section className="container-page pb-12 sm:pb-16">
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-teal-950 via-teal-900 to-ink-950 text-white shadow-xl border border-teal-800/40">
-          <div className="grid lg:grid-cols-12 gap-8 items-center p-6 sm:p-10 lg:p-12">
-            <div className="lg:col-span-7 space-y-4">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 border border-teal-400/30 text-teal-300 text-xs font-semibold">
-                <Star className="h-3.5 w-3.5 text-amber-300" />
-                <span>Academic Foundation Advisory</span>
-              </div>
-              <h2 className="font-display text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-balance leading-tight">
-                Build a Bulletproof Foundation: <span className="text-teal-300">100-Level &amp; MTH 201 Hub</span>
-              </h2>
-              <p className="text-ink-200 text-sm sm:text-base leading-relaxed max-w-xl">
-                Excelling in your 100-level courses sets the GPA bedrock for your entire university career.
-                For 200-level science and computing students, <strong>MTH 201 (Mathematical Methods)</strong> is notoriously challenging—thorough revision with certified past exam questions and step-by-step solutions dramatically increases your pass rate and academic distinction.
-              </p>
-              <div className="pt-2 flex flex-wrap gap-3">
-                <Link to="/materials?level=100">
-                  <Button size="md" className="bg-teal-500 hover:bg-teal-400 text-ink-950 font-bold border-none" rightIcon={<ArrowRight className="h-4 w-4" />}>
-                    Explore 100L Study Pack
-                  </Button>
-                </Link>
-                <Link to="/materials?q=MTH+201">
-                  <Button size="md" variant="outline" className="border-teal-400/40 text-teal-100 hover:bg-teal-800/50">
-                    Search MTH 201 Solutions
-                  </Button>
-                </Link>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-4 border-t border-teal-800/60 text-xs text-teal-200">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                  <span>Curated Syllabi</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                  <span>Past Papers with Solutions</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                  <span>Continuous Assessment Tests</span>
-                </div>
-              </div>
-            </div>
-            <div className="lg:col-span-5 relative">
-              <div className="relative overflow-hidden rounded-2xl border border-teal-500/30 shadow-2xl group">
-                <img
-                  src="https://images.pexels.com/photos/3184328/pexels-photo-1438081.jpeg?auto=compress&cs=tinysrgb&w=800"
-                  alt="Students studying university mathematics and sciences"
-                  className="w-full h-64 sm:h-80 object-cover transition-transform duration-500 group-hover:scale-105"
-                  loading="lazy"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-ink-950/90 via-ink-950/30 to-transparent" />
-                <div className="absolute bottom-4 left-4 right-4">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-teal-300">High-Yield Study Prep</p>
-                  <p className="text-sm font-bold text-white mt-0.5">Faculty of Science &amp; Computing Exam Focus</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* Professional Academic Gateway & Departmental Prerequisite Advisory Matrix */}
+      <AcademicGatewayMatrix />
 
       {/* Practice section */}
       <section className="bg-ink-950 text-white">

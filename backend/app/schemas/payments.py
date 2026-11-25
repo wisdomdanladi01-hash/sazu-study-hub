@@ -135,6 +135,7 @@ class PaymentInitializeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     package_id: int = Field(gt=0)
+    callback_url: str | None = Field(default=None, max_length=1000)
 
 
 class PaymentInitializeResponse(BaseModel):

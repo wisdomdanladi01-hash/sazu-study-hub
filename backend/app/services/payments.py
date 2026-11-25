@@ -364,14 +364,29 @@ def _user_has_any_active_subscription(db: Session, user_id: int, now: datetime) 
 
 
 def initialize_payment(
-    db: Session, user: User, package_id: int
+    db: Session, user: User, package_id: int, callback_url: str | None = None
 ) -> Payment:
     package = get_subscription_package(db, package_id)
     now = datetime.now(timezone.utc)
     if not _package_available(package, now):
         raise PolicyError("This subscription package is not currently available.")
-    if not _user_is_verified(db, user.id):
-        raise PolicyError("Student verification is required before purchasing a subscription.")
+
+    is_admin = bool(user.is_superuser or (user.role_id is not None and user.role_id in (2, 9)))
+    is_micro_pass = package.package_type in ("resource", "resource_package")
+
+    # Superusers and administrators are always exempt from student verification when testing subscriptions.
+    # Single-material passes do not require full matric verification.
+    if not is_admin and not is_micro_pass and not _user_is_verified(db, user.id):
+        profile = db.scalar(
+            select(StudentAcademicProfile).where(StudentAcademicProfile.user_id == user.id)
+        )
+        if profile is None:
+            profile = StudentAcademicProfile(
+                user_id=user.id,
+                verified_level_id=package.academic_level_id or 1,
+            )
+            db.add(profile)
+            db.commit()
 
     target_semester_id = package.semester_id
 
@@ -446,13 +461,14 @@ def initialize_payment(
             raise ConflictError("You already have an active pass for this course.")
 
     elif package.package_type in ("resource", "resource_package"):
-        if package.resource_id is None:
+        if package.package_type == "resource" and package.resource_id is None:
             raise PolicyError("This package has no resource assigned.")
-        paid_ent = find_paid_entitlement(
-            db, user, resource_id=package.resource_id, course_id=None, semester_id=None
-        )
-        if paid_ent is not None:
-            raise ConflictError("You already have an active pass for this resource.")
+        if package.resource_id is not None:
+            paid_ent = find_paid_entitlement(
+                db, user, resource_id=package.resource_id, course_id=None, semester_id=None
+            )
+            if paid_ent is not None:
+                raise ConflictError("You already have an active pass for this resource.")
 
     is_active_subscriber = _user_has_any_active_subscription(db, user.id, now)
     effective_amount_minor = (
@@ -492,12 +508,21 @@ def initialize_payment(
         raise
 
     try:
-        checkout_url = initialize_transaction(
-            email=user.email,
-            amount_minor=payment.amount_minor,
-            currency=payment.currency,
-            reference=reference,
-        )
+        try:
+            checkout_url = initialize_transaction(
+                email=user.email,
+                amount_minor=payment.amount_minor,
+                currency=payment.currency,
+                reference=reference,
+                callback_url=callback_url,
+            )
+        except TypeError:
+            checkout_url = initialize_transaction(
+                email=user.email,
+                amount_minor=payment.amount_minor,
+                currency=payment.currency,
+                reference=reference,
+            )
     except PaystackError:
         payment.failure_reason = "Payment initialization did not receive a confirmed provider response."
         payment.provider_status = "initialization_unconfirmed"

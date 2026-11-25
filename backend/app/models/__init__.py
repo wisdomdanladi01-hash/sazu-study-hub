@@ -35,6 +35,12 @@ from app.models.resource import (
     ResourceCourseOffering,
     ResourceFile,
 )
+from app.models.ai_agent import (
+    AIAgentConsultationLog,
+    AIGeneratedQuestion,
+    AIStudySchedulePlan,
+    StudentDiagnosticProfile,
+)
 from app.models.subscription import Subscription, SubscriptionPlan
 from app.models.support import StudentSupportTicket
 from app.models.user import Role, User
@@ -72,4 +78,9 @@ __all__ = [
     "AssessmentConfig",
     "AssessmentConfigResource",
     "AssessmentAttempt",
+    "StudentSupportTicket",
+    "StudentDiagnosticProfile",
+    "AIGeneratedQuestion",
+    "AIStudySchedulePlan",
+    "AIAgentConsultationLog",
 ]

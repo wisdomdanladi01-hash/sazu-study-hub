@@ -48,10 +48,11 @@ export const paymentService = {
     return Array.isArray(res) ? res : (res.items || []);
   },
 
-  async initializePayment(packageId: number): Promise<{ checkout_url: string; reference: string }> {
+  async initializePayment(packageId: number, callbackUrl?: string): Promise<{ checkout_url: string; reference: string }> {
+    const defaultCallback = `${window.location.origin}/payment/return`;
     return apiRequest<{ checkout_url: string; reference: string }>('/payments/initialize', {
       method: 'POST',
-      body: JSON.stringify({ package_id: packageId }),
+      body: JSON.stringify({ package_id: packageId, callback_url: callbackUrl || defaultCallback }),
     });
   },
 

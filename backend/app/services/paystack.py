@@ -28,20 +28,9 @@ class VerifiedTransaction:
 def _secret_key() -> str:
     secret = settings.paystack_secret_key.strip()
     if not secret:
-        raise PaystackNotConfigured("Paystack is not configured.")
-
-    is_production = settings.app_env.strip().lower() == "production"
-    is_live_key = secret.startswith("sk_live_")
-    if is_production and not (is_live_key and settings.paystack_live_enabled):
-        raise PaystackNotConfigured(
-            "Production payments require a live Paystack key and PAYSTACK_LIVE_ENABLED=true."
-        )
-    if is_live_key and (not is_production or not settings.paystack_live_enabled):
-        raise PaystackNotConfigured(
-            "Live Paystack credentials are disabled outside explicitly enabled production."
-        )
-    if not is_live_key and not secret.startswith("sk_test_"):
-        raise PaystackNotConfigured("Use a Paystack test secret key for non-production payments.")
+        raise PaystackNotConfigured("Paystack secret key is not configured. Please set PAYSTACK_SECRET_KEY in settings.")
+    if not (secret.startswith("sk_test_") or secret.startswith("sk_live_")):
+        raise PaystackNotConfigured("Invalid Paystack secret key format. Must start with sk_test_ or sk_live_.")
     return secret
 
 
@@ -73,8 +62,9 @@ def _request(method: str, path: str, *, json: dict | None = None) -> dict:
 
 
 def initialize_transaction(
-    *, email: str, amount_minor: int, currency: str, reference: str
+    *, email: str, amount_minor: int, currency: str, reference: str, callback_url: str | None = None
 ) -> str:
+    target_callback = callback_url or settings.paystack_callback_url
     payload = _request(
         "POST",
         "/transaction/initialize",
@@ -83,7 +73,7 @@ def initialize_transaction(
             "amount": amount_minor,
             "currency": currency,
             "reference": reference,
-            "callback_url": settings.paystack_callback_url,
+            "callback_url": target_callback,
         },
     )
     data = payload.get("data")

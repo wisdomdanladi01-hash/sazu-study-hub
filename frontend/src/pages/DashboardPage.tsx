@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { ResourceCard } from '@/components/ResourceCard';
 import { StudentTicketsSection } from '@/components/StudentTicketsSection';
+import { ChallengingCoursesTracker } from '@/components/ChallengingCoursesTracker';
 import { EmptyState } from '@/components/ui/EmptyState';
 import {
   BookOpen,
@@ -416,6 +417,9 @@ export function DashboardPage() {
               </div>
             )}
           </section>
+
+          {/* Challenging Courses & Focus Tracker */}
+          <ChallengingCoursesTracker />
 
           {/* Academic Record Corrections & Complaints */}
           <StudentTicketsSection />

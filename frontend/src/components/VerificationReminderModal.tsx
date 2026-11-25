@@ -122,11 +122,10 @@ export function VerificationReminderModal() {
               </div>
             </div>
             <span
-              className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                emailOk
-                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                  : 'bg-amber-50 text-amber-700 border border-amber-200'
-              }`}
+              className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${emailOk
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                : 'bg-amber-50 text-amber-700 border border-amber-200'
+                }`}
             >
               {emailOk ? 'Confirmed ✓' : 'Code Needed'}
             </span>
@@ -148,19 +147,18 @@ export function VerificationReminderModal() {
               </div>
             </div>
             <span
-              className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                academicVerified
-                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                  : academicStatus === 'pending'
+              className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${academicVerified
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                : academicStatus === 'pending'
                   ? 'bg-sky-50 text-sky-700 border border-sky-200'
                   : 'bg-amber-50 text-amber-700 border border-amber-200'
-              }`}
+                }`}
             >
               {academicVerified
                 ? 'Verified ✓'
                 : academicStatus === 'pending'
-                ? 'In Review ⏳'
-                : 'Not Submitted'}
+                  ? 'In Review ⏳'
+                  : 'Not Submitted'}
             </span>
           </div>
         </div>

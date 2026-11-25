@@ -247,11 +247,22 @@ def remove_subscription_package(
 )
 def initialize_subscription_payment(
     data: PaymentInitializeRequest,
+    request: Request,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> PaymentInitializeResponse:
+    target_callback = data.callback_url
+    if not target_callback:
+        origin = request.headers.get("origin") or request.headers.get("referer")
+        if origin:
+            clean_origin = origin.split("?")[0].rstrip("/")
+            for subpath in ("/pricing", "/materials", "/courses", "/dashboard"):
+                if subpath in clean_origin:
+                    clean_origin = clean_origin.split(subpath)[0]
+            target_callback = f"{clean_origin}/payment/return"
+
     try:
-        payment = initialize_payment(db, user, data.package_id)
+        payment = initialize_payment(db, user, data.package_id, callback_url=target_callback)
     except (ConflictError, NotFoundError, PolicyError) as exc:
         _raise_service_error(exc)
     except PaystackNotConfigured as exc:
