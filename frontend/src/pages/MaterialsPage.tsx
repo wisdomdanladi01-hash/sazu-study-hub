@@ -50,16 +50,16 @@ export function MaterialsPage() {
     setLoading(true);
     setError(null);
     catalogService.queryResources({
-        q,
-        courseId: courseId || null,
-        departmentId: departmentId || null,
-        level: level || null,
-        semester: semester || null,
-        type: type || null,
-        sort,
-        page,
-        pageSize: PAGE_SIZE,
-      })
+      q,
+      courseId: courseId || null,
+      departmentId: departmentId || null,
+      level: level || null,
+      semester: semester || null,
+      type: type || null,
+      sort,
+      page,
+      pageSize: PAGE_SIZE,
+    })
       .then((response) => { if (active) setResult(response); })
       .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : 'Unable to load learning materials.'); })
       .finally(() => { if (active) setLoading(false); });
@@ -132,22 +132,20 @@ export function MaterialsPage() {
         <button
           type="button"
           onClick={() => update({ level: '100', q: '', page: '' })}
-          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border transition font-medium ${
-            level === '100'
-              ? 'bg-teal-700 text-white border-teal-700 shadow-xs'
-              : 'bg-teal-50 text-teal-800 border-teal-200 hover:bg-teal-100'
-          }`}
+          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border transition font-medium ${level === '100'
+            ? 'bg-teal-700 text-white border-teal-700 shadow-xs'
+            : 'bg-teal-50 text-teal-800 border-teal-200 hover:bg-teal-100'
+            }`}
         >
           <span>✨ 100L Foundation Gateway (First-Year Essentials)</span>
         </button>
         <button
           type="button"
           onClick={() => update({ q: 'MTH201', page: '' })}
-          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border transition font-medium ${
-            q.toUpperCase().includes('MTH201')
-              ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
-              : 'bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100'
-          }`}
+          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border transition font-medium ${q.toUpperCase().includes('MTH201')
+            ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+            : 'bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100'
+            }`}
         >
           <span>🔥 MTH201 Pass-Booster (Mathematical Methods PQ &amp; Solutions)</span>
         </button>

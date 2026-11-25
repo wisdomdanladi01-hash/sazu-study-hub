@@ -36,6 +36,7 @@ from app.models.resource import (
     ResourceFile,
 )
 from app.models.subscription import Subscription, SubscriptionPlan
+from app.models.support import StudentSupportTicket
 from app.models.user import Role, User
 
 __all__ = [

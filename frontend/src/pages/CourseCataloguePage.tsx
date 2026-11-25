@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BookOpen, GraduationCap, Search } from 'lucide-react';
+import { ArrowRight, BookOpen, Search, GraduationCap } from 'lucide-react';
 import { Alert } from '@/components/ui/Alert';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -64,21 +64,31 @@ export function CourseCataloguePage() {
       </header>
 
       {/* 100L Gateway Foundation Spotlight Banner */}
-      <Card className="mb-6 border-teal-200 bg-linear-to-r from-teal-50/70 via-white to-emerald-50/40 p-5 sm:p-6 shadow-xs">
-        <div className="flex flex-col sm:flex-row items-start gap-4">
-          <div className="p-3 rounded-2xl bg-teal-100 text-teal-800 shrink-0 shadow-2xs">
-            <GraduationCap className="h-6 w-6" />
-          </div>
-          <div className="space-y-1.5 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="font-display text-base sm:text-lg font-bold text-ink-950">
-                100-Level Academic Gateway: Build Your CGPA Foundation Early
-              </h2>
-              <Badge tone="teal">Crucial for Newcomers</Badge>
+      <Card className="mb-6 overflow-hidden border-teal-200 bg-linear-to-r from-teal-50/70 via-white to-emerald-50/40 p-0 shadow-xs">
+        <div className="grid sm:grid-cols-12 items-center">
+          <div className="p-5 sm:p-6 sm:col-span-8 lg:col-span-9 flex flex-col sm:flex-row items-start gap-4">
+            <div className="p-3 rounded-2xl bg-teal-100 text-teal-800 shrink-0 shadow-2xs">
+              <GraduationCap className="h-6 w-6" />
             </div>
-            <p className="text-xs sm:text-sm text-ink-700 leading-relaxed max-w-4xl">
-              Your 100-Level grades establish the benchmark for your graduating Cumulative GPA (CGPA). Mastering early foundational sciences, general university requirements, and departmental introductory courses creates the stability needed for honors graduation. Verified Continuous Assessment (C.A.) test papers and worked marking guides are highlighted below to help first-year students study ahead and pass with distinction.
-            </p>
+            <div className="space-y-1.5 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-display text-base sm:text-lg font-bold text-ink-950">
+                  100-Level Academic Gateway: Build Your CGPA Foundation Early
+                </h2>
+                <Badge tone="teal">Crucial for Newcomers</Badge>
+              </div>
+              <p className="text-xs sm:text-sm text-ink-700 leading-relaxed max-w-4xl">
+                Your 100-Level grades establish the benchmark for your graduating Cumulative GPA (CGPA). Mastering early foundational sciences, general university requirements, and departmental introductory courses creates the stability needed for honors graduation. Verified Continuous Assessment (C.A.) test papers and worked marking guides are highlighted below to help first-year students study ahead and pass with distinction.
+              </p>
+            </div>
+          </div>
+          <div className="hidden sm:block sm:col-span-4 lg:col-span-3 h-full">
+            <img
+              src="https://images.pexels.com/photos/159711/books-bookstore-book-reading-159711.jpeg?auto=compress&cs=tinysrgb&w=800"
+              alt="Academic library books and study materials"
+              className="w-full h-full object-cover min-h-[140px]"
+              loading="lazy"
+            />
           </div>
         </div>
       </Card>
@@ -238,42 +248,39 @@ function CourseOfferingCard({ course, offering }: OfferingRow) {
                 coverage.status === 'complete'
                   ? 'green'
                   : coverage.status === 'partial'
-                  ? 'amber'
-                  : 'neutral'
+                    ? 'amber'
+                    : 'neutral'
               }
             >
               {coverage.status === 'complete'
                 ? 'Complete (3/3)'
                 : coverage.status === 'partial'
-                ? `${coverage.available_core_count}/3 Available`
-                : 'Coming soon'}
+                  ? `${coverage.available_core_count}/3 Available`
+                  : 'Coming soon'}
             </Badge>
           </div>
           <div className="flex flex-wrap gap-1.5 text-[11px]">
             <span
-              className={`rounded px-2 py-0.5 font-medium ${
-                coverage.has_handout
-                  ? 'bg-emerald-100/70 text-emerald-800'
-                  : 'bg-ink-100 text-ink-400'
-              }`}
+              className={`rounded px-2 py-0.5 font-medium ${coverage.has_handout
+                ? 'bg-emerald-100/70 text-emerald-800'
+                : 'bg-ink-100 text-ink-400'
+                }`}
             >
               {coverage.has_handout ? '✓ Handout' : '○ No Handout'}
             </span>
             <span
-              className={`rounded px-2 py-0.5 font-medium ${
-                coverage.has_test_pq
-                  ? 'bg-emerald-100/70 text-emerald-800'
-                  : 'bg-ink-100 text-ink-400'
-              }`}
+              className={`rounded px-2 py-0.5 font-medium ${coverage.has_test_pq
+                ? 'bg-emerald-100/70 text-emerald-800'
+                : 'bg-ink-100 text-ink-400'
+                }`}
             >
               {coverage.has_test_pq ? '✓ Test PQ' : '○ No Test PQ'}
             </span>
             <span
-              className={`rounded px-2 py-0.5 font-medium ${
-                coverage.has_exam_pq
-                  ? 'bg-emerald-100/70 text-emerald-800'
-                  : 'bg-ink-100 text-ink-400'
-              }`}
+              className={`rounded px-2 py-0.5 font-medium ${coverage.has_exam_pq
+                ? 'bg-emerald-100/70 text-emerald-800'
+                : 'bg-ink-100 text-ink-400'
+                }`}
             >
               {coverage.has_exam_pq ? '✓ Exam PQ' : '○ No Exam PQ'}
             </span>

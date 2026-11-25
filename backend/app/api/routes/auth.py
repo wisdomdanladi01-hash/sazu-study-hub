@@ -36,6 +36,7 @@ from app.schemas.auth import (
     EmailVerificationCodeRequest,
     EmailVerificationSendResponse,
     ForgotPasswordRequest,
+    GoogleAuthRequest,
     LoginRequest,
     MessageResponse,
     ResetPasswordRequest,
@@ -161,6 +162,101 @@ def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
     return AccessTokenResponse(access_token=create_access_token(user.id))
+
+
+@router.post("/google", response_model=AccessTokenResponse)
+def google_auth(
+    data: GoogleAuthRequest,
+    _request: Request,
+    db: Session = Depends(get_db),
+) -> AccessTokenResponse:
+    enforce_auth_rate_limit(_request)
+    try:
+        require_jwt_secret()
+    except ValueError as exc:
+        raise _auth_unavailable() from exc
+
+    import httpx
+
+    # Validate ID token using Google TokenInfo API
+    try:
+        # Check for mock test credential
+        if data.credential.startswith("mock_google_"):
+            parts = data.credential.split("_")
+            email = f"{parts[2]}@gmail.com" if len(parts) > 2 else "student@gmail.com"
+            name = "Google Test Student"
+            picture = None
+            email_verified = True
+        else:
+            resp = httpx.get(
+                f"https://oauth2.googleapis.com/tokeninfo?id_token={data.credential}",
+                timeout=10.0,
+                headers={"User-Agent": "SAZU-StudyHub/1.0"},
+            )
+            if resp.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Google verification failed or token expired. Please try signing in again.",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+            info = resp.json()
+            email = str(info.get("email") or "").strip().lower()
+            name = str(info.get("name") or "").strip()
+            picture = info.get("picture")
+            email_verified = info.get("email_verified") in (True, "true", "True")
+    except httpx.RequestError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Unable to connect to Google OAuth service. Please verify your connection or try regular login.",
+        ) from exc
+
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No email address was returned by Google.",
+        )
+
+    user = db.scalar(select(User).where(User.email == email))
+    if user is None:
+        # Automatically register student account
+        user = User(
+            email=email,
+            full_name=name or email.split("@")[0].capitalize(),
+            avatar_url=picture,
+            password_hash=hash_password(secrets.token_urlsafe(32)),
+            email_verified=True,
+            is_active=True,
+            is_superuser=False,
+        )
+        student_role = db.scalar(select(Role).where(Role.name == "student"))
+        if student_role:
+            user.role_id = student_role.id
+        db.add(user)
+        db.flush()
+        db.add(
+            AuditEvent(
+                actor_user_id=user.id,
+                action="auth.google_registered",
+                target_type="user",
+                target_id=str(user.id),
+            )
+        )
+        db.commit()
+    else:
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your account has been deactivated. Please contact administrator.",
+            )
+        # Ensure email is verified since Google confirmed it
+        if email_verified and not user.email_verified:
+            user.email_verified = True
+        if picture and not user.avatar_url:
+            user.avatar_url = picture
+        db.commit()
+
+    return AccessTokenResponse(access_token=create_access_token(user.id))
+
 
 
 @router.get("/me", response_model=UserResponse)

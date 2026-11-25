@@ -51,6 +51,7 @@ interface AuthContextValue extends AuthState {
   isAuthenticated: boolean;
   isAdmin: boolean;
   signIn: (email: string, password: string) => Promise<{ ok: boolean; error?: string; profile?: StudentProfile }>;
+  signInWithGoogle: (credential: string) => Promise<{ ok: boolean; error?: string; profile?: StudentProfile }>;
   register: (input: {
     firstName: string;
     middleName?: string;
@@ -162,6 +163,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { ok: true, profile };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : 'Unable to sign in.' };
+    }
+  }, []);
+
+  const signInWithGoogle = useCallback(async (credential: string) => {
+    try {
+      const result = await apiRequest<{ access_token: string }>(
+        '/auth/google',
+        { method: 'POST', body: JSON.stringify({ credential }) },
+        null,
+      );
+      setAccessToken(result.access_token);
+      const profile = await fetchProfile(result.access_token);
+      setState({ profile, token: result.access_token, isLoading: false, authError: null });
+      return { ok: true, profile };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : 'Unable to sign in with Google.' };
     }
   }, []);
 
@@ -305,6 +322,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAuthenticated: Boolean(state.token && state.profile),
     isAdmin: Boolean(state.profile?.isAdmin),
     signIn,
+    signInWithGoogle,
     register,
     signOut,
     refreshProfile,
@@ -312,7 +330,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     uploadAvatar,
     sendEmailVerificationCode,
     verifyEmailCode,
-  }), [state, signIn, register, signOut, refreshProfile, updateProfile, uploadAvatar, sendEmailVerificationCode, verifyEmailCode]);
+  }), [state, signIn, signInWithGoogle, register, signOut, refreshProfile, updateProfile, uploadAvatar, sendEmailVerificationCode, verifyEmailCode]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

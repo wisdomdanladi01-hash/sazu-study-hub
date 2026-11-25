@@ -8,7 +8,7 @@ import { catalogService } from '@/services/catalog';
 import type { AcademicCatalogue } from '@/types';
 import type { CatalogResource } from '@/services/catalog';
 import { paymentService, type SubscriptionPackage } from '@/services/payments';
-import { Search, ArrowRight, BookOpen, ListChecks, FileText, FileQuestion, GraduationCap, ClipboardList, ShieldCheck, CreditCard, Eye, ChevronRight } from 'lucide-react';
+import { Search, ArrowRight, BookOpen, ListChecks, FileText, FileQuestion, GraduationCap, ClipboardList, ShieldCheck, CreditCard, Eye, ChevronRight, Sparkles, Star, CheckCircle2 } from 'lucide-react';
 import { formatNaira } from '@/utils/format';
 
 const howSteps = [
@@ -185,6 +185,68 @@ export function HomePage() {
         </div>
       </section>
 
+      {/* 100-Level Foundation & MTH 201 Academic Hub */}
+      <section className="container-page pb-12 sm:pb-16">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-teal-950 via-teal-900 to-ink-950 text-white shadow-xl border border-teal-800/40">
+          <div className="grid lg:grid-cols-12 gap-8 items-center p-6 sm:p-10 lg:p-12">
+            <div className="lg:col-span-7 space-y-4">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 border border-teal-400/30 text-teal-300 text-xs font-semibold">
+                <Star className="h-3.5 w-3.5 text-amber-300" />
+                <span>Academic Foundation Advisory</span>
+              </div>
+              <h2 className="font-display text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-balance leading-tight">
+                Build a Bulletproof Foundation: <span className="text-teal-300">100-Level &amp; MTH 201 Hub</span>
+              </h2>
+              <p className="text-ink-200 text-sm sm:text-base leading-relaxed max-w-xl">
+                Excelling in your 100-level courses sets the GPA bedrock for your entire university career.
+                For 200-level science and computing students, <strong>MTH 201 (Mathematical Methods)</strong> is notoriously challenging—thorough revision with certified past exam questions and step-by-step solutions dramatically increases your pass rate and academic distinction.
+              </p>
+              <div className="pt-2 flex flex-wrap gap-3">
+                <Link to="/materials?level=100">
+                  <Button size="md" className="bg-teal-500 hover:bg-teal-400 text-ink-950 font-bold border-none" rightIcon={<ArrowRight className="h-4 w-4" />}>
+                    Explore 100L Study Pack
+                  </Button>
+                </Link>
+                <Link to="/materials?q=MTH+201">
+                  <Button size="md" variant="outline" className="border-teal-400/40 text-teal-100 hover:bg-teal-800/50">
+                    Search MTH 201 Solutions
+                  </Button>
+                </Link>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-4 border-t border-teal-800/60 text-xs text-teal-200">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                  <span>Curated Syllabi</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                  <span>Past Papers with Solutions</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                  <span>Continuous Assessment Tests</span>
+                </div>
+              </div>
+            </div>
+            <div className="lg:col-span-5 relative">
+              <div className="relative overflow-hidden rounded-2xl border border-teal-500/30 shadow-2xl group">
+                <img
+                  src="https://images.pexels.com/photos/3184328/pexels-photo-1438081.jpeg?auto=compress&cs=tinysrgb&w=800"
+                  alt="Students studying university mathematics and sciences"
+                  className="w-full h-64 sm:h-80 object-cover transition-transform duration-500 group-hover:scale-105"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-ink-950/90 via-ink-950/30 to-transparent" />
+                <div className="absolute bottom-4 left-4 right-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-teal-300">High-Yield Study Prep</p>
+                  <p className="text-sm font-bold text-white mt-0.5">Faculty of Science &amp; Computing Exam Focus</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Practice section */}
       <section className="bg-ink-950 text-white">
         <div className="container-page py-12 sm:py-16">
@@ -302,11 +364,35 @@ function HeroPreviewStack() {
     <div className="relative">
       <div className="absolute -inset-4 bg-gradient-to-br from-teal-100 to-ink-100 rounded-3xl blur-2xl opacity-60" aria-hidden />
       <div className="relative space-y-3">
+        {/* Visual photo banner */}
+        <div className="relative overflow-hidden rounded-2xl shadow-card border border-ink-150 group">
+          <img
+            src="https://images.pexels.com/photos/1438081/pexels-photo-1438081.jpeg?auto=compress&cs=tinysrgb&w=800"
+            alt="University students studying together"
+            className="w-full h-44 sm:h-48 object-cover transition-transform duration-500 group-hover:scale-105"
+            loading="eager"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-ink-950/85 via-ink-950/30 to-transparent" />
+          <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-white">
+            <div>
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-teal-300 bg-teal-950/70 backdrop-blur-xs px-2.5 py-0.5 rounded-full border border-teal-500/30">
+                <Sparkles className="h-3 w-3" /> SAZU Study Network
+              </span>
+              <p className="font-display text-sm sm:text-base font-bold mt-1 text-white">
+                Collaborative Campus Learning
+              </p>
+            </div>
+            <span className="text-xs font-semibold text-teal-200 bg-white/10 px-2.5 py-1 rounded-lg backdrop-blur-xs border border-white/15">
+              Verified Syllabi
+            </span>
+          </div>
+        </div>
+
         {featured.map((r, i) => {
           const Icon = icons[i % icons.length];
           return (
-            <Card key={r.id} className="p-4 flex items-center gap-3 shadow-card">
-              <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-teal-50 text-teal-700 shrink-0">
+            <Card key={r.id} className="p-3.5 flex items-center gap-3 shadow-card hover:border-teal-200 transition-all">
+              <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-teal-50 text-teal-700 shrink-0">
                 <Icon className="h-5 w-5" />
               </div>
               <div className="min-w-0 flex-1">
@@ -314,7 +400,7 @@ function HeroPreviewStack() {
                 <p className="truncate text-sm font-bold text-ink-950">{r.title}</p>
                 <p className="text-xs text-ink-500 mt-0.5">{r.type}{r.level ? ` · Level ${r.level}` : ''}</p>
               </div>
-              <span className="hidden sm:inline-flex items-center gap-1 text-xs font-semibold text-teal-700 bg-teal-50 px-2 py-1 rounded-full">
+              <span className="hidden sm:inline-flex items-center gap-1 text-xs font-semibold text-teal-700 bg-teal-50 px-2 py-1 rounded-full shrink-0">
                 <Eye className="h-3.5 w-3.5" /> Details
               </span>
             </Card>
@@ -328,10 +414,26 @@ function HeroPreviewStack() {
 
 function PracticePreview() {
   return (
-    <div className="space-y-3">
-      <div className="rounded-2xl bg-white/5 border border-white/10 p-5 backdrop-blur-sm">
-        <p className="text-sm font-semibold text-white">Practice tests</p>
-        <p className="mt-2 text-sm text-ink-300">Practice assessments will appear here when the assessment service is available.</p>
+    <div className="relative overflow-hidden rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm group">
+      <div className="relative h-44 sm:h-52 overflow-hidden">
+        <img
+          src="https://images.pexels.com/photos/1438072/pexels-photo-1438072.jpeg?auto=compress&cs=tinysrgb&w=800"
+          alt="Student preparing for exams"
+          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 opacity-85"
+          loading="lazy"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/50 to-transparent" />
+        <div className="absolute top-3 right-3">
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-300 bg-ink-950/80 px-2.5 py-1 rounded-full border border-amber-400/30">
+            <Sparkles className="h-3 w-3" /> Timed Mock Engine
+          </span>
+        </div>
+      </div>
+      <div className="p-5">
+        <p className="text-sm font-semibold text-white">Interactive Assessment Service</p>
+        <p className="mt-2 text-xs sm:text-sm text-ink-300 leading-relaxed">
+          Standardized past question simulations and instant scoring are being prepared by university departments.
+        </p>
       </div>
     </div>
   );

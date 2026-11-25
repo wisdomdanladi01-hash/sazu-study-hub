@@ -27,9 +27,10 @@ export function VerificationReminderModal() {
       return;
     }
 
-    // Check if verification is needed (either email unverified or student status not approved)
+    // Check if verification is needed (either email unverified or student status not approved/verified)
     const emailNeedsVerification = !profile.emailVerified;
-    const academicNeedsVerification = profile.verificationStatus !== 'approved';
+    const isAcademicVerified = profile.verificationStatus === 'verified' || profile.verificationStatus === 'approved';
+    const academicNeedsVerification = !isAcademicVerified;
 
     if (!emailNeedsVerification && !academicNeedsVerification) {
       setOpen(false);
@@ -71,6 +72,7 @@ export function VerificationReminderModal() {
   if (!open || !profile) return null;
 
   const emailOk = Boolean(profile.emailVerified);
+  const academicVerified = profile.verificationStatus === 'verified' || profile.verificationStatus === 'approved';
   const academicStatus = profile.verificationStatus || 'not_submitted';
 
   return (
@@ -133,7 +135,7 @@ export function VerificationReminderModal() {
           {/* Step 2: Student Academic Identity */}
           <div className="flex items-center justify-between p-3 rounded-xl border border-ink-100 bg-ink-50/50">
             <div className="flex items-center gap-2.5">
-              {academicStatus === 'approved' ? (
+              {academicVerified ? (
                 <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
               ) : academicStatus === 'pending' ? (
                 <Clock className="h-4 w-4 text-sky-600 shrink-0" />
@@ -147,14 +149,14 @@ export function VerificationReminderModal() {
             </div>
             <span
               className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                academicStatus === 'approved'
+                academicVerified
                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                   : academicStatus === 'pending'
                   ? 'bg-sky-50 text-sky-700 border border-sky-200'
                   : 'bg-amber-50 text-amber-700 border border-amber-200'
               }`}
             >
-              {academicStatus === 'approved'
+              {academicVerified
                 ? 'Verified ✓'
                 : academicStatus === 'pending'
                 ? 'In Review ⏳'

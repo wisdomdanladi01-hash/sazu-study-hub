@@ -32,6 +32,7 @@ import {
   Layers,
   HelpCircle,
 } from 'lucide-react';
+import { AdminTicketsSection } from '@/components/AdminTicketsSection';
 import { formatDate } from '@/utils/format';
 
 export function AdminOverviewPage() {
@@ -630,6 +631,9 @@ export function AdminOverviewPage() {
           )}
         </Card>
       </div>
+
+      {/* Student Complaints & Corrections Resolution Desk */}
+      <AdminTicketsSection />
 
       {/* Edit Admin Profile Modal */}
       {editProfileOpen && (

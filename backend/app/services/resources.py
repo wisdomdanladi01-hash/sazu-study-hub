@@ -499,14 +499,51 @@ def find_paid_entitlement(
             )
         )
         res_obj = db.get(Resource, resource_id)
-        if res_obj and res_obj.academic_level_id:
+        if res_obj:
+            # 1. Level Pass: Matches level, and if semester_id is specified on package, must match resource semester.
+            # If package semester_id is NULL, it is a Level Session Pass covering all semesters for that level.
+            if res_obj.academic_level_id:
+                conditions.append(
+                    exists().where(
+                        AccessPackage.id == Entitlement.package_id,
+                        AccessPackage.package_type == "level",
+                        AccessPackage.academic_level_id == res_obj.academic_level_id,
+                        or_(
+                            AccessPackage.semester_id.is_(None),
+                            AccessPackage.semester_id == res_obj.semester_id,
+                        ),
+                    )
+                )
+
+            # 2. Cross-Level Pass: covers any level for students with carryovers or studying ahead
             conditions.append(
                 exists().where(
                     AccessPackage.id == Entitlement.package_id,
-                    AccessPackage.package_type == "level",
-                    AccessPackage.academic_level_id == res_obj.academic_level_id,
+                    AccessPackage.package_type.in_(["cross_level", "all_access"]),
+                    or_(
+                        AccessPackage.semester_id.is_(None),
+                        AccessPackage.semester_id == res_obj.semester_id,
+                    ),
+                    or_(
+                        AccessPackage.academic_session_id.is_(None),
+                        AccessPackage.academic_session_id == res_obj.academic_session_id,
+                    ),
                 )
             )
+
+            # 3. Session Pass: covers the entire session for that level or across levels
+            if res_obj.academic_session_id:
+                conditions.append(
+                    exists().where(
+                        AccessPackage.id == Entitlement.package_id,
+                        AccessPackage.package_type == "session",
+                        AccessPackage.academic_session_id == res_obj.academic_session_id,
+                        or_(
+                            AccessPackage.academic_level_id.is_(None),
+                            AccessPackage.academic_level_id == res_obj.academic_level_id,
+                        ),
+                    )
+                )
     if course_id is not None:
         conditions.append(Entitlement.course_id == course_id)
         conditions.append(

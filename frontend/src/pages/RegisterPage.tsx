@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { AuthShell } from '@/components/AuthShell';
+import { GoogleLoginButton } from '@/components/GoogleLoginButton';
 import {
   Eye,
   EyeOff,
@@ -101,6 +102,20 @@ export function RegisterPage() {
           <p className="mt-2 text-sm sm:text-base leading-relaxed text-ink-600">
             Sign up to access course handouts, past exams, and interactive assessments tailored to your SAZU faculty.
           </p>
+        </div>
+
+        <div className="mb-6">
+          <GoogleLoginButton mode="signup" redirectUrl={redirect ? `/onboarding?redirect=${encodeURIComponent(redirect)}` : '/onboarding'} />
+          <div className="relative mt-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-ink-150" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-white px-3 text-ink-400 font-semibold tracking-wider">
+                Or create account with email
+              </span>
+            </div>
+          </div>
         </div>
 
         {error && (

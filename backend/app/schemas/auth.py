@@ -56,6 +56,10 @@ class StudentRegistration(BaseModel):
         return normalized or None
 
 
+class GoogleAuthRequest(BaseModel):
+    credential: str = Field(..., min_length=10, description="Google OAuth ID Token")
+
+
 class LoginRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

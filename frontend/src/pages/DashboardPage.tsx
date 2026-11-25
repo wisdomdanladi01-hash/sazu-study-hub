@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { ResourceCard } from '@/components/ResourceCard';
+import { StudentTicketsSection } from '@/components/StudentTicketsSection';
 import { EmptyState } from '@/components/ui/EmptyState';
 import {
   BookOpen,
@@ -121,7 +122,9 @@ export function DashboardPage() {
   const expiry = dashboard?.subscription?.ends_at ?? profile.subscriptionExpiresAt;
   const emailVerified = Boolean(dashboard?.user?.email_verified || profile.emailVerified);
   const verificationStatus = dashboard?.verification.status ?? profile.verificationStatus ?? 'not_submitted';
-  const isFullyVerified = emailVerified && verificationStatus === 'approved';
+  const isStudentVerified = verificationStatus === 'verified' || verificationStatus === 'approved';
+  const isPendingVerification = verificationStatus === 'pending' || verificationStatus === 'needs_review';
+  const isFullyVerified = emailVerified && isStudentVerified;
   const avatarUrl = profile.avatarUrl ?? dashboard?.user?.avatar_url ?? null;
   const nickname = profile.nickname ?? dashboard?.user?.nickname ?? null;
   const matric = dashboard?.academic_profile?.matriculation_number ?? profile.matriculationNumber ?? null;
@@ -193,20 +196,19 @@ export function DashboardPage() {
                 )}
 
                 <span
-                  className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
-                    verificationStatus === 'approved'
-                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                      : verificationStatus === 'pending'
+                  className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${isStudentVerified
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    : isPendingVerification
                       ? 'bg-sky-50 text-sky-800 border-sky-200'
                       : 'bg-amber-50 text-amber-800 border-amber-200'
-                  }`}
+                    }`}
                 >
-                  {verificationStatus === 'approved' ? (
+                  {isStudentVerified ? (
                     <>
                       <CheckCircle2 className="h-3 w-3 text-emerald-600" />
                       Student Identity Approved
                     </>
-                  ) : verificationStatus === 'pending' ? (
+                  ) : isPendingVerification ? (
                     <>
                       <Clock className="h-3 w-3 text-sky-600" />
                       Verification Under Review
@@ -271,9 +273,9 @@ export function DashboardPage() {
                 </div>
 
                 <div className="flex items-center gap-2.5 p-3 rounded-xl bg-white border border-amber-200/80 shadow-2xs">
-                  {verificationStatus === 'approved' ? (
+                  {isStudentVerified ? (
                     <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                  ) : verificationStatus === 'pending' ? (
+                  ) : isPendingVerification ? (
                     <Clock className="h-4 w-4 text-sky-600 shrink-0" />
                   ) : (
                     <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
@@ -281,11 +283,11 @@ export function DashboardPage() {
                   <div>
                     <p className="text-xs font-bold text-ink-900">Step 2: Matric &amp; Academic Status</p>
                     <p className="text-[11px] text-ink-500">
-                      {verificationStatus === 'approved'
+                      {isStudentVerified
                         ? 'Approved by administrator'
-                        : verificationStatus === 'pending'
-                        ? 'Awaiting administrator review'
-                        : 'Submit matric no. and programme'}
+                        : isPendingVerification
+                          ? 'Awaiting administrator review'
+                          : 'Submit matric no. and programme'}
                     </p>
                   </div>
                 </div>
@@ -295,7 +297,7 @@ export function DashboardPage() {
             <div className="shrink-0 flex flex-col gap-2">
               <Link to="/onboarding">
                 <Button size="md" rightIcon={<ArrowRight className="h-4 w-4" />}>
-                  {verificationStatus === 'pending' ? 'View Submission Status' : 'Verify Student Status'}
+                  {isPendingVerification ? 'View Submission Status' : 'Verify Student Status'}
                 </Button>
               </Link>
             </div>
@@ -414,10 +416,43 @@ export function DashboardPage() {
               </div>
             )}
           </section>
+
+          {/* Academic Record Corrections & Complaints */}
+          <StudentTicketsSection />
         </div>
 
         {/* Sidebar */}
         <aside className="space-y-6">
+          {/* Campus Study Lounge Card */}
+          <Card className="overflow-hidden border-teal-150">
+            <div className="relative h-28 sm:h-32 overflow-hidden group">
+              <img
+                src="https://images.pexels.com/photos/3807755/pexels-photo-3807755.jpeg?auto=compress&cs=tinysrgb&w=600"
+                alt="Students studying in university lounge"
+                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-ink-950/85 via-ink-950/25 to-transparent" />
+              <div className="absolute bottom-2.5 left-3.5 right-3.5">
+                <span className="text-[10px] uppercase font-bold tracking-wider text-teal-300">Campus Study Lounge</span>
+                <p className="text-xs font-bold text-white">Daily Study Habit Tips</p>
+              </div>
+            </div>
+            <div className="p-4">
+              <p className="text-xs text-ink-600 leading-relaxed">
+                Reviewing past exam questions 30 minutes each day builds long-term recall. Bookmark challenging courses for focused weekend revision.
+              </p>
+              <div className="mt-3 pt-2.5 border-t border-ink-100 flex items-center justify-between text-xs">
+                <Link to="/materials?level=100" className="font-semibold text-teal-700 hover:text-teal-800 hover:underline">
+                  100L Gateway
+                </Link>
+                <Link to="/materials?q=MTH+201" className="font-semibold text-teal-700 hover:text-teal-800 hover:underline">
+                  MTH 201 Hub
+                </Link>
+              </div>
+            </div>
+          </Card>
+
           {/* Quick Actions */}
           <Card className="p-5">
             <h3 className="font-display font-bold text-ink-950 mb-3">Quick Navigation</h3>

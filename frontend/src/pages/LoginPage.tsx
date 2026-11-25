@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { Dialog } from '@/components/ui/Dialog';
 import { AuthShell } from '@/components/AuthShell';
+import { GoogleLoginButton } from '@/components/GoogleLoginButton';
 import { apiRequest } from '@/services/api';
 import { Eye, EyeOff, Mail, Lock, ArrowLeft, KeyRound, Sparkles, CheckCircle2, Send } from 'lucide-react';
 
@@ -150,6 +151,21 @@ export function LoginPage() {
             {error}
           </Alert>
         )}
+
+        {/* Google OAuth One-Click Sign-In */}
+        <div className="mb-5">
+          <GoogleLoginButton redirectUrl={redirect} mode="signin" />
+          <div className="relative my-5">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-ink-150" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-white px-3 text-ink-400 font-semibold tracking-wider">
+                Or sign in with email
+              </span>
+            </div>
+          </div>
+        </div>
 
         <form onSubmit={submit} className="space-y-4">
           <div>

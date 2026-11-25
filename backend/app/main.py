@@ -15,6 +15,8 @@ from app.api.routes.payments import webhook_router as paystack_webhook_router
 from app.api.routes.resources import admin_router as resources_admin_router
 from app.api.routes.resources import router as resources_router
 from app.api.routes.student_portal import router as student_portal_router
+from app.api.routes.support import admin_router as support_admin_router
+from app.api.routes.support import router as support_router
 from app.api.routes.verification import admin_router as verification_admin_router
 from app.api.routes.verification import router as verification_router
 from app.core.config import settings
@@ -75,6 +77,8 @@ app.include_router(payments_admin_router, prefix=settings.api_v1_str)
 app.include_router(paystack_webhook_router, prefix=settings.api_v1_str)
 app.include_router(assessments_router, prefix=settings.api_v1_str)
 app.include_router(assessments_admin_router, prefix=settings.api_v1_str)
+app.include_router(support_router, prefix=settings.api_v1_str)
+app.include_router(support_admin_router, prefix=settings.api_v1_str)
 
 
 @app.get("/")
