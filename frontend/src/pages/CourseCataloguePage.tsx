@@ -64,7 +64,7 @@ export function CourseCataloguePage() {
       </header>
 
       {/* 100L Gateway Foundation Spotlight Banner */}
-      <Card className="mb-6 overflow-hidden border-teal-200 bg-linear-to-r from-teal-50/70 via-white to-emerald-50/40 p-0 shadow-xs">
+      <Card className="mb-6 overflow-hidden border-teal-200 bg-gradient-to-r from-teal-50/70 via-white to-emerald-50/40 p-0 shadow-xs">
         <div className="grid sm:grid-cols-12 items-center">
           <div className="p-5 sm:p-6 sm:col-span-8 lg:col-span-9 flex flex-col sm:flex-row items-start gap-4">
             <div className="p-3 rounded-2xl bg-teal-100 text-teal-800 shrink-0 shadow-2xs">

@@ -19,9 +19,6 @@ export function BrandMark({ size = 'md', to = '/' }: { size?: 'sm' | 'md' | 'lg'
         <span className={`font-display font-extrabold ${sizes.title} text-ink-950 tracking-tight`}>
           SAZU <span className="text-teal-600">Study Hub</span>
         </span>
-        <span className={`mt-0.5 ${sizes.sub} font-medium text-ink-500 uppercase tracking-[0.14em]`}>
-          Student learning resources
-        </span>
       </span>
     </Link>
   );

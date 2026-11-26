@@ -380,7 +380,7 @@ export function PricingPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Tier 3: Subscribed Student Rate (₦1,000) */}
-                <Card className="p-6 sm:p-7 border-teal-300 bg-linear-to-br from-teal-50/70 via-white to-emerald-50/30 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between">
+                <Card className="p-6 sm:p-7 border-teal-300 bg-gradient-to-br from-teal-50/70 via-white to-emerald-50/30 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between">
                   <div>
                     <div className="flex items-center justify-between gap-2 mb-3">
                       <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold uppercase tracking-wider flex items-center gap-1">
@@ -661,7 +661,7 @@ export function PricingPage() {
           )}
 
           {/* Security & Instant Processing banner */}
-          <div className="p-6 rounded-3xl bg-linear-to-r from-teal-900 to-ink-950 text-white shadow-xl flex flex-col sm:flex-row items-center justify-between gap-6">
+          <div className="p-6 rounded-3xl bg-ink-950 bg-gradient-to-r from-teal-900 to-ink-950 text-white shadow-xl flex flex-col sm:flex-row items-center justify-between gap-6 border border-teal-800/40">
             <div className="flex items-start gap-4">
               <div className="p-3 rounded-2xl bg-teal-500/20 text-teal-300 border border-teal-500/30 shrink-0">
                 <ShieldCheck className="h-6 w-6" />

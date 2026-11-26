@@ -397,7 +397,7 @@ export function ResourceDetailPage() {
 
           {/* Pedagogical Advisory for MTH201 or 100-Level */}
           {((resource.course.code || '').toUpperCase().replace(/\s+/g, '') === 'MTH201' || (resource.course.title || '').toLowerCase().includes('mathematical method')) && (
-            <Card className="mt-5 p-4 sm:p-5 border-amber-300 bg-linear-to-r from-amber-50/80 via-white to-amber-50/40">
+            <Card className="mt-5 p-4 sm:p-5 border-amber-300 bg-gradient-to-r from-amber-50/80 via-white to-amber-50/40">
               <div className="flex items-start gap-3">
                 <span className="p-2 rounded-xl bg-amber-100 text-amber-800 shrink-0">
                   <Sparkles className="h-5 w-5" />
@@ -415,7 +415,7 @@ export function ResourceDetailPage() {
           )}
 
           {(resource.level === '100' || (resource.course.code || '').match(/^[A-Z]+\s*1/i)) && ((resource.course.code || '').toUpperCase().replace(/\s+/g, '') !== 'MTH201') && (
-            <Card className="mt-5 p-4 sm:p-5 border-teal-200 bg-linear-to-r from-teal-50/70 via-white to-teal-50/30">
+            <Card className="mt-5 p-4 sm:p-5 border-teal-200 bg-gradient-to-r from-teal-50/70 via-white to-teal-50/30">
               <div className="flex items-start gap-3">
                 <span className="p-2 rounded-xl bg-teal-100 text-teal-800 shrink-0">
                   <GraduationCap className="h-5 w-5" />

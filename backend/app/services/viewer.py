@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import threading
+import xml.etree.ElementTree as ET
+import zipfile
 from collections import OrderedDict
 from dataclasses import dataclass
 
@@ -14,6 +17,31 @@ from app.services.errors import NotFoundError
 PDF_TYPES = {"application/pdf"}
 IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 TEXT_TYPES = {"text/plain"}
+DOCX_TYPES = {
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/msword",
+}
+
+
+def extract_docx_text(data: bytes) -> str:
+    """Extract human-readable paragraphs from a Word (.docx) document."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            xml_content = z.read("word/document.xml")
+            tree = ET.fromstring(xml_content)
+            paragraphs = []
+            for p in tree.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}p"):
+                texts = [
+                    node.text
+                    for node in p.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t")
+                    if node.text
+                ]
+                if texts:
+                    paragraphs.append("".join(texts))
+            return "\n\n".join(paragraphs) if paragraphs else "No readable text found in document."
+    except Exception:
+        return "Unable to parse Word document content for browser preview."
+
 
 _MAX_TEXT_BYTES = 200_000
 _CACHE_MAX_ENTRIES = 4
@@ -139,6 +167,8 @@ def build_page_index(sources: list[SourceFile]) -> tuple[list[PageRef], list[str
             pages.append(PageRef(len(pages) + 1, "image", index, 0))
         elif src.mime_type in TEXT_TYPES:
             pages.append(PageRef(len(pages) + 1, "text", index, 0))
+        elif src.mime_type in DOCX_TYPES:
+            pages.append(PageRef(len(pages) + 1, "text", index, 0))
         else:
             skipped.append(src.name)
         if len(pages) >= settings.viewer_max_pages:
@@ -152,6 +182,9 @@ def render_page(sources: list[SourceFile], page: PageRef, watermark: str) -> tup
     data = _read_source(src)
 
     if page.kind == "text":
+        if src.mime_type in DOCX_TYPES:
+            text = extract_docx_text(data)
+            return text.encode("utf-8"), "text/plain; charset=utf-8"
         text = data[:_MAX_TEXT_BYTES].decode("utf-8", errors="replace")
         return text.encode("utf-8"), "text/plain; charset=utf-8"
 

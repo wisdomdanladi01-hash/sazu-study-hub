@@ -1,18 +1,19 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { catalogService } from '@/services/catalog';
 import type { AcademicCatalogue, Level, ResourceType, Semester } from '@/types';
 import type { ResourcePage } from '@/services/catalog';
 import { ResourceCard } from '@/components/ResourceCard';
+import { CourseResourceCard } from '@/components/CourseResourceCard';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Search, SlidersHorizontal, X, RotateCcw, ChevronLeft, ChevronRight, BookX } from 'lucide-react';
+import { Search, SlidersHorizontal, X, RotateCcw, ChevronLeft, ChevronRight, BookX, LayoutGrid, List } from 'lucide-react';
 
-const PAGE_SIZE = 9;
+const PAGE_SIZE = 12;
 
 export function MaterialsPage() {
   const [params, setParams] = useSearchParams();
@@ -21,6 +22,7 @@ export function MaterialsPage() {
   const [result, setResult] = useState<ResourcePage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'grouped' | 'list'>('grouped');
 
   const q = params.get('q') ?? '';
   const courseId = params.get('course') ?? '';
@@ -81,6 +83,30 @@ export function MaterialsPage() {
 
   // close drawer when route changes
   useEffect(() => { setDrawerOpen(false); }, [page]);
+
+  // Group current page results by unique course
+  const courseGroups = useMemo(() => {
+    if (!result?.items) return [];
+    const groups: Array<{
+      course: { id: number; code: string; title: string; department?: string };
+      items: typeof result.items;
+    }> = [];
+    const map = new Map<number | string, (typeof groups)[0]>();
+
+    for (const r of result.items) {
+      const key = r.course.id || r.course.code;
+      if (!map.has(key)) {
+        const group = {
+          course: r.course,
+          items: [],
+        };
+        map.set(key, group);
+        groups.push(group);
+      }
+      map.get(key)!.items.push(r);
+    }
+    return groups;
+  }, [result?.items]);
 
   return (
     <div className="container-page py-8 sm:py-10">
@@ -173,15 +199,50 @@ export function MaterialsPage() {
 
         {/* Results */}
         <section>
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-sm text-ink-600">
-              <span className="font-semibold text-ink-900">{result?.total ?? 0}</span> resource{result?.total !== 1 ? 's' : ''}
-              {q && <> for &ldquo;{q}&rdquo;</>}
-            </p>
-            {activeFilterCount > 0 && (
-              <button onClick={resetFilters} className="inline-flex items-center gap-1.5 text-sm font-semibold text-teal-700 hover:text-teal-800">
-                <RotateCcw className="h-3.5 w-3.5" /> Reset filters
-              </button>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+            <div className="flex items-center gap-3">
+              <p className="text-sm text-ink-600">
+                <span className="font-semibold text-ink-900">{result?.total ?? 0}</span> resource{result?.total !== 1 ? 's' : ''}
+                {viewMode === 'grouped' && courseGroups.length > 0 && (
+                  <span className="text-ink-500"> across {courseGroups.length} course{courseGroups.length !== 1 ? 's' : ''}</span>
+                )}
+                {q && <> for &ldquo;{q}&rdquo;</>}
+              </p>
+              {activeFilterCount > 0 && (
+                <button onClick={resetFilters} className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-700 hover:text-teal-800">
+                  <RotateCcw className="h-3 w-3" /> Reset
+                </button>
+              )}
+            </div>
+
+            {/* View Mode Toggle: Course Grouped Cards vs Individual Items */}
+            {result && result.items.length > 0 && (
+              <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-ink-100 border border-ink-200 text-xs self-start sm:self-auto shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('grouped')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+                    viewMode === 'grouped'
+                      ? 'bg-white text-teal-800 shadow-xs'
+                      : 'text-ink-600 hover:text-ink-950'
+                  }`}
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                  <span>Course Hub ({courseGroups.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('list')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+                    viewMode === 'list'
+                      ? 'bg-white text-teal-800 shadow-xs'
+                      : 'text-ink-600 hover:text-ink-950'
+                  }`}
+                >
+                  <List className="h-3.5 w-3.5" />
+                  <span>All Items ({result.items.length})</span>
+                </button>
+              </div>
             )}
           </div>
 
@@ -206,11 +267,24 @@ export function MaterialsPage() {
             />
           ) : (
             <>
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {result.items.map((r) => (
-                  <ResourceCard key={r.id} resource={r} course={r.course} />
-                ))}
-              </div>
+              {viewMode === 'grouped' ? (
+                <div className="grid gap-5 sm:grid-cols-1 xl:grid-cols-2">
+                  {courseGroups.map((group) => (
+                    <CourseResourceCard
+                      key={group.course.id || group.course.code}
+                      course={group.course}
+                      resources={group.items}
+                      defaultExpanded={courseGroups.length === 1}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {result.items.map((r) => (
+                    <ResourceCard key={r.id} resource={r} course={r.course} />
+                  ))}
+                </div>
+              )}
 
               {/* Pagination */}
               {result.totalPages > 1 && (

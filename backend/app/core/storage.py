@@ -186,20 +186,36 @@ class LocalPrivateStorageProvider(StorageProvider):
         )
 
     def resolve_local_path(self, storage_key: str) -> Path:
-        root = self._root()
-        path = (root / storage_key).resolve()
-        if path.is_file():
-            return path
-        # Check backend package root if configured root differs
-        backend_root = (Path(__file__).resolve().parent.parent.parent / "private_storage").resolve()
-        backend_path = (backend_root / storage_key).resolve()
-        if backend_path.is_file():
-            return backend_path
-        # Check fallback temp root if configured root differs
-        temp_root = (Path(tempfile.gettempdir()) / "private_storage").resolve()
-        fallback_path = (temp_root / storage_key).resolve()
-        if fallback_path.is_file():
-            return fallback_path
+        candidate_roots = [
+            self._root(),
+            (Path(__file__).resolve().parent.parent.parent / "private_storage").resolve(),
+            (Path(__file__).resolve().parent.parent.parent.parent / "private_storage").resolve(),
+            (Path(__file__).resolve().parent.parent.parent.parent / "backend" / "private_storage").resolve(),
+            (Path.cwd() / "private_storage").resolve(),
+            (Path.cwd() / "backend" / "private_storage").resolve(),
+            (Path(tempfile.gettempdir()) / "private_storage").resolve(),
+        ]
+
+        for root in candidate_roots:
+            candidate = (root / storage_key).resolve()
+            if candidate.is_file():
+                return candidate
+
+        # Also search by basename in candidate resource directories
+        key_name = Path(storage_key).name
+        for root in candidate_roots:
+            for sub in [root, root / "resources"]:
+                direct_match = (sub / key_name).resolve()
+                if direct_match.is_file():
+                    return direct_match
+
+        # Fallback to project resources directory if available
+        res_dir = (Path(__file__).resolve().parent.parent.parent.parent / "resources").resolve()
+        if res_dir.is_dir():
+            for f in res_dir.glob("*"):
+                if f.is_file() and f.name.lower() == key_name.lower():
+                    return f
+
         raise FileNotFoundError(f"Storage object '{storage_key}' not found.")
 
     def read_file(self, storage_key: str) -> tuple[BinaryIO, int]:

@@ -133,12 +133,12 @@ export function DashboardPage() {
   return (
     <div className="container-page py-8 sm:py-10 space-y-7">
       {/* 1. Student Hero Profile Card */}
-      <Card className="p-6 sm:p-7 border-teal-100 bg-linear-to-r from-teal-50/40 via-white to-emerald-50/20 shadow-xs">
+      <Card className="p-6 sm:p-7 border-teal-100 bg-gradient-to-r from-teal-50/40 via-white to-emerald-50/20 shadow-xs">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
           <div className="flex items-center gap-5">
             {/* Avatar with Camera badge */}
             <div className="relative shrink-0 group">
-              <div className="h-20 w-20 sm:h-22 sm:w-22 rounded-2xl overflow-hidden bg-linear-to-br from-teal-600 to-emerald-800 text-white shadow-md border-3 border-white flex items-center justify-center font-display font-bold text-2xl sm:text-3xl">
+              <div className="h-20 w-20 sm:h-22 sm:w-22 rounded-2xl overflow-hidden bg-gradient-to-br from-teal-600 to-emerald-800 text-white shadow-md border-3 border-white flex items-center justify-center font-display font-bold text-2xl sm:text-3xl">
                 {avatarUrl ? (
                   <img src={avatarUrl} alt={profile.fullName} className="h-full w-full object-cover" />
                 ) : (
@@ -240,7 +240,7 @@ export function DashboardPage() {
 
       {/* 2. Clear Student Verification Section */}
       {!isFullyVerified ? (
-        <Card className="p-6 border-amber-300 bg-linear-to-br from-amber-50/70 via-white to-amber-50/30 shadow-xs">
+        <Card className="p-6 border-amber-300 bg-gradient-to-br from-amber-50/70 via-white to-amber-50/30 shadow-xs">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="space-y-2 max-w-2xl">
               <div className="flex items-center gap-2">

@@ -138,7 +138,7 @@ export function ChallengingCoursesTracker() {
   };
 
   return (
-    <Card className="p-5 sm:p-7 border-teal-200/80 bg-linear-to-br from-teal-50/50 via-white to-white shadow-xs">
+    <Card className="p-5 sm:p-7 border-teal-200/80 bg-gradient-to-br from-teal-50/50 via-white to-white shadow-xs">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-4 border-b border-ink-100">
         <div>
           <div className="flex items-center gap-2">

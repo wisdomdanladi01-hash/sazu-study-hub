@@ -61,14 +61,14 @@ export function HomePage() {
         <div className="container-page pt-10 pb-12 sm:pt-14 sm:pb-16">
           <div className="grid gap-10 lg:grid-cols-12 lg:gap-12 items-center">
             <div className="lg:col-span-7 animate-slide-up">
-              <Badge tone="teal" className="mb-4">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-teal-500" /> Built for SAZU students
+              <Badge tone="teal" className="mb-4 shadow-2xs">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-teal-500 animate-pulse" /> Official Academic Resource Hub
               </Badge>
-              <h1 className="font-display text-[2rem] leading-[1.1] sm:text-5xl font-extrabold text-ink-950 text-balance">
-                Your Courses. Your Resources. <span className="text-teal-600">Your Next Exam.</span>
+              <h1 className="font-display text-[2.2rem] leading-[1.12] sm:text-5xl lg:text-[3.25rem] font-extrabold text-ink-950 text-balance tracking-tight">
+                Resources Made Available for a <span className="text-teal-600 bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-700 bg-clip-text text-transparent">Successful Academic Journey</span>
               </h1>
-              <p className="mt-5 max-w-xl text-base sm:text-lg text-ink-800 leading-relaxed font-normal">
-                Discover verified course lecture handouts, syllabus guides, test past papers, and marking schemes organized around your academic journey at SAZU.
+              <p className="mt-5 max-w-xl text-base sm:text-lg text-ink-700 leading-relaxed font-normal">
+                Past examination papers, verified test solutions, and comprehensive lecture handouts for your exact university courses — organized by session, searchable instantly, and ready when you are.
               </p>
               <div className="mt-7 flex flex-col sm:flex-row gap-3">
                 <Link to="/materials">
@@ -294,16 +294,60 @@ export function HomePage() {
 
 function HeroPreviewStack() {
   const [featured, setFeatured] = useState<CatalogResource[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const [fadeKey, setFadeKey] = useState(0);
+
   useEffect(() => {
     let active = true;
-    catalogService.featuredResources(3).then((items) => { if (active) setFeatured(items); }).catch(() => {
-      if (active) setFeatured([]);
-    });
-    return () => { active = false; };
+    catalogService
+      .featuredResources(15)
+      .then((items) => {
+        if (active) setFeatured(items);
+      })
+      .catch(() => {
+        if (active) setFeatured([]);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
+
+  // Auto-rotate every 4.5 seconds when not paused by mouse hover
+  useEffect(() => {
+    if (featured.length <= 3 || isPaused) return;
+    const timer = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % featured.length);
+      setFadeKey((prev) => prev + 1);
+    }, 4500);
+    return () => clearInterval(timer);
+  }, [featured.length, isPaused]);
+
+  const handleNext = () => {
+    if (featured.length === 0) return;
+    setCurrentIndex((prev) => (prev + 1) % featured.length);
+    setFadeKey((prev) => prev + 1);
+  };
+
+  const handlePrev = () => {
+    if (featured.length === 0) return;
+    setCurrentIndex((prev) => (prev - 1 + featured.length) % featured.length);
+    setFadeKey((prev) => prev + 1);
+  };
+
+  // Get 3 visible rotating items
+  const visibleItems = featured.length > 0
+    ? [0, 1, 2].map((offset) => featured[(currentIndex + offset) % featured.length])
+    : [];
+
   const icons = [FileText, FileQuestion, GraduationCap];
+
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+    >
       <div className="absolute -inset-4 bg-gradient-to-br from-teal-100 to-ink-100 rounded-3xl blur-2xl opacity-60" aria-hidden />
       <div className="relative space-y-3">
         {/* Visual photo banner: Academic study books and library collection */}
@@ -330,25 +374,77 @@ function HeroPreviewStack() {
           </div>
         </div>
 
-        {featured.map((r, i) => {
-          const Icon = icons[i % icons.length];
-          return (
-            <Card key={r.id} className="p-3.5 flex items-center gap-3 shadow-card hover:border-teal-200 transition-all">
-              <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-teal-50 text-teal-700 shrink-0">
-                <Icon className="h-5 w-5" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold text-teal-700">{r.course.code} · {r.course.title}</p>
-                <p className="truncate text-sm font-bold text-ink-950">{r.title}</p>
-                <p className="text-xs text-ink-500 mt-0.5">{r.type}{r.level ? ` · Level ${r.level}` : ''}</p>
-              </div>
-              <span className="hidden sm:inline-flex items-center gap-1 text-xs font-semibold text-teal-700 bg-teal-50 px-2 py-1 rounded-full shrink-0">
-                <Eye className="h-3.5 w-3.5" /> Details
+        {/* Dynamic Rotating Header Indicator */}
+        {featured.length > 3 && (
+          <div className="flex items-center justify-between px-1 text-xs text-ink-600">
+            <span className="inline-flex items-center gap-1.5 font-semibold text-[11px] text-teal-800 bg-teal-50 border border-teal-200 px-2.5 py-0.5 rounded-full">
+              <span className="h-1.5 w-1.5 rounded-full bg-teal-600 animate-ping" />
+              Live Catalogue Feed &bull; Rotating {isPaused ? '(Paused)' : ''}
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handlePrev}
+                aria-label="Previous documents"
+                className="h-6 w-6 rounded-md bg-white border border-ink-200 text-ink-700 hover:bg-teal-50 hover:text-teal-800 flex items-center justify-center transition shadow-2xs"
+              >
+                &lsaquo;
+              </button>
+              <span className="text-[11px] font-mono text-ink-500">
+                {currentIndex + 1} / {featured.length}
               </span>
-            </Card>
-          );
-        })}
-        {featured.length === 0 && <p className="rounded-xl border border-dashed border-ink-200 bg-white p-5 text-sm text-ink-600">Published learning materials will appear here.</p>}
+              <button
+                type="button"
+                onClick={handleNext}
+                aria-label="Next documents"
+                className="h-6 w-6 rounded-md bg-white border border-ink-200 text-ink-700 hover:bg-teal-50 hover:text-teal-800 flex items-center justify-center transition shadow-2xs"
+              >
+                &rsaquo;
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Rotating Course Document Cards with Smooth Fade Transition */}
+        <div key={fadeKey} className="space-y-2.5 animate-fade-in transition-all">
+          {visibleItems.map((r, i) => {
+            const Icon = icons[i % icons.length];
+            return (
+              <Link key={`${r.id}-${i}`} to={`/materials/${r.id}`} className="block group">
+                <Card className="p-3.5 flex items-center gap-3 shadow-card hover:border-teal-400 hover:shadow-md transition-all group-hover:-translate-y-0.5">
+                  <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-teal-50 text-teal-700 shrink-0 group-hover:bg-teal-600 group-hover:text-white transition-colors">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-[11px] font-bold text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200/60">
+                        {r.course.code}
+                      </span>
+                      <span className="truncate text-xs font-semibold text-ink-700">
+                        {r.course.title}
+                      </span>
+                    </div>
+                    <p className="truncate text-sm font-bold text-ink-950 mt-0.5 group-hover:text-teal-800 transition-colors">
+                      {r.title}
+                    </p>
+                    <p className="text-[11px] text-ink-500 mt-0.5">
+                      {r.type}{r.level ? ` · Level ${r.level}` : ''}{r.semester ? ` · ${r.semester} Sem` : ''}
+                    </p>
+                  </div>
+                  <span className="hidden sm:inline-flex items-center gap-1 text-xs font-bold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-full shrink-0 group-hover:bg-teal-600 group-hover:text-white transition-colors">
+                    <Eye className="h-3.5 w-3.5" /> Details
+                  </span>
+                </Card>
+              </Link>
+            );
+          })}
+        </div>
+
+        {featured.length === 0 && (
+          <p className="rounded-xl border border-dashed border-ink-200 bg-white p-5 text-sm text-ink-600">
+            Published learning materials will appear here.
+          </p>
+        )}
       </div>
     </div>
   );
