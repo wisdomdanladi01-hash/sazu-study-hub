@@ -10,5 +10,3 @@ __pycache__/
 .mypy_cache/
 *.log
 .DS_Store
-
-private_storage/resources/*.private
