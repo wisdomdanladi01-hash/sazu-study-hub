@@ -65,9 +65,8 @@ export function PaymentResultPage() {
           </>
         ) : (
           <>
-            <div className={`mx-auto mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl ${
-              isOk ? 'bg-green-100 text-green-700' : isPending ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
-            }`}>
+            <div className={`mx-auto mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl ${isOk ? 'bg-green-100 text-green-700' : isPending ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
+              }`}>
               {isOk ? <CheckCircle2 className="h-7 w-7" /> : isPending ? <Clock className="h-7 w-7" /> : <XCircle className="h-7 w-7" />}
             </div>
             <Badge tone={isOk ? 'green' : isPending ? 'amber' : 'red'} className="mb-2">

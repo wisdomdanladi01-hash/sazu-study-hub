@@ -141,11 +141,10 @@ export function PricingPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
-              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer ${
-                activeTab === tab.id
-                  ? 'bg-teal-600 text-white shadow-md shadow-teal-600/20 scale-105'
-                  : 'bg-white border border-ink-200 text-ink-700 hover:border-teal-300 hover:bg-teal-50/50'
-              }`}
+              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer ${activeTab === tab.id
+                ? 'bg-teal-600 text-white shadow-md shadow-teal-600/20 scale-105'
+                : 'bg-white border border-ink-200 text-ink-700 hover:border-teal-300 hover:bg-teal-50/50'
+                }`}
             >
               {tab.label}
             </button>
