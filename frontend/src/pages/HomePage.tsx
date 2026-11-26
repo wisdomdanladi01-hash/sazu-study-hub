@@ -60,40 +60,40 @@ export function HomePage() {
         </div>
         <div className="container-page pt-10 pb-12 sm:pt-14 sm:pb-16">
           <div className="grid gap-10 lg:grid-cols-12 lg:gap-12 items-center">
-            <div className="lg:col-span-7">
+            <div className="lg:col-span-7 animate-slide-up">
               <Badge tone="teal" className="mb-4">
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-teal-500" /> Built for SAZU students
               </Badge>
               <h1 className="font-display text-[2rem] leading-[1.1] sm:text-5xl font-extrabold text-ink-950 text-balance">
                 Your Courses. Your Resources. <span className="text-teal-600">Your Next Exam.</span>
               </h1>
-              <p className="mt-5 max-w-xl text-base sm:text-lg text-ink-700 leading-relaxed">
-                Discover learning materials organized around your academic journey at SAZU.
+              <p className="mt-5 max-w-xl text-base sm:text-lg text-ink-800 leading-relaxed font-normal">
+                Discover verified course lecture handouts, syllabus guides, test past papers, and marking schemes organized around your academic journey at SAZU.
               </p>
               <div className="mt-7 flex flex-col sm:flex-row gap-3">
                 <Link to="/materials">
-                  <Button size="lg" fullWidth={false} leftIcon={<BookOpen className="h-5 w-5" />} rightIcon={<ArrowRight className="h-4 w-4" />}>
+                  <Button size="lg" fullWidth={false} leftIcon={<BookOpen className="h-5 w-5" />} rightIcon={<ArrowRight className="h-4 w-4" />} className="shadow-md hover:shadow-lg transition-all">
                     Explore Learning Materials
                   </Button>
                 </Link>
                 <Link to="/courses">
-                  <Button size="lg" variant="outline" leftIcon={<GraduationCap className="h-5 w-5" />}>
+                  <Button size="lg" variant="outline" leftIcon={<GraduationCap className="h-5 w-5" />} className="border-ink-300 font-semibold text-ink-800 hover:bg-ink-50">
                     Browse Course Catalogue
                   </Button>
                 </Link>
                 <Link to="/practice">
-                  <Button size="lg" variant="outline" leftIcon={<ListChecks className="h-5 w-5" />}>
+                  <Button size="lg" variant="outline" leftIcon={<ListChecks className="h-5 w-5" />} className="border-ink-300 font-semibold text-ink-800 hover:bg-ink-50">
                     Explore Practice Tests
                   </Button>
                 </Link>
               </div>
-              <p className="mt-4 text-sm text-ink-500">
+              <p className="mt-4 text-sm font-medium text-ink-700">
                 Browse public course and resource listings without signing in.
               </p>
             </div>
 
             {/* Visual: stack of resource preview cards */}
-            <div className="lg:col-span-5">
+            <div className="lg:col-span-5 animate-slide-up-delay-2">
               <HeroPreviewStack />
             </div>
           </div>
@@ -306,11 +306,11 @@ function HeroPreviewStack() {
     <div className="relative">
       <div className="absolute -inset-4 bg-gradient-to-br from-teal-100 to-ink-100 rounded-3xl blur-2xl opacity-60" aria-hidden />
       <div className="relative space-y-3">
-        {/* Visual photo banner */}
+        {/* Visual photo banner: Academic study books and library collection */}
         <div className="relative overflow-hidden rounded-2xl shadow-card border border-ink-150 group">
           <img
-            src="https://images.pexels.com/photos/1438081/pexels-photo-1438081.jpeg?auto=compress&cs=tinysrgb&w=800"
-            alt="University students studying together"
+            src="https://images.pexels.com/photos/159711/books-bookstore-book-reading-159711.jpeg?auto=compress&cs=tinysrgb&w=800"
+            alt="Stack of academic study books and library course materials"
             className="w-full h-44 sm:h-48 object-cover transition-transform duration-500 group-hover:scale-105"
             loading="eager"
           />
@@ -318,10 +318,10 @@ function HeroPreviewStack() {
           <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-white">
             <div>
               <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-teal-300 bg-teal-950/70 backdrop-blur-xs px-2.5 py-0.5 rounded-full border border-teal-500/30">
-                <Sparkles className="h-3 w-3" /> SAZU Study Network
+                <Sparkles className="h-3 w-3" /> SAZU Academic Library
               </span>
               <p className="font-display text-sm sm:text-base font-bold mt-1 text-white">
-                Collaborative Campus Learning
+                Course Materials &amp; Past Questions
               </p>
             </div>
             <span className="text-xs font-semibold text-teal-200 bg-white/10 px-2.5 py-1 rounded-lg backdrop-blur-xs border border-white/15">
@@ -359,8 +359,8 @@ function PracticePreview() {
     <div className="relative overflow-hidden rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm group">
       <div className="relative h-44 sm:h-52 overflow-hidden">
         <img
-          src="https://images.pexels.com/photos/1438072/pexels-photo-1438072.jpeg?auto=compress&cs=tinysrgb&w=800"
-          alt="Student preparing for exams"
+          src="https://images.pexels.com/photos/256455/pexels-photo-256455.jpeg?auto=compress&cs=tinysrgb&w=800"
+          alt="Stack of library textbooks and exam revision books"
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 opacity-85"
           loading="lazy"
         />

@@ -489,6 +489,17 @@ def find_paid_entitlement(
     """
     now = datetime.now(timezone.utc)
 
+    # 1. Superuser / Admin check
+    is_admin = bool(user.is_superuser or (user.role_id is not None and user.role_id in (2, 9)))
+    if is_admin:
+        return 0, None
+
+    # Fetch user's verified level
+    student_profile = db.scalar(
+        select(StudentAcademicProfile).where(StudentAcademicProfile.user_id == user.id)
+    )
+    user_level_id = student_profile.verified_level_id if student_profile else None
+
     conditions = []
     if resource_id is not None:
         conditions.append(Entitlement.resource_id == resource_id)
@@ -500,8 +511,27 @@ def find_paid_entitlement(
         )
         res_obj = db.get(Resource, resource_id)
         if res_obj:
-            # 1. Level Pass: Matches level, and if semester_id is specified on package, must match resource semester.
-            # If package semester_id is NULL, it is a Level Session Pass covering all semesters for that level.
+            # 1. Direct package resource reference
+            conditions.append(
+                exists().where(
+                    AccessPackage.id == Entitlement.package_id,
+                    AccessPackage.resource_id == res_obj.id,
+                )
+            )
+
+            # 2. General single-material micro-pass (Tier 5 & Tier 6)
+            conditions.append(
+                exists().where(
+                    AccessPackage.id == Entitlement.package_id,
+                    AccessPackage.package_type.in_(["resource", "resource_package"]),
+                    or_(
+                        AccessPackage.academic_level_id.is_(None),
+                        AccessPackage.academic_level_id == res_obj.academic_level_id,
+                    ),
+                )
+            )
+
+            # 3. Level Pass (Tier 3 & Tier 4): Matches level regardless of which semester
             if res_obj.academic_level_id:
                 conditions.append(
                     exists().where(
@@ -515,35 +545,51 @@ def find_paid_entitlement(
                     )
                 )
 
-            # 2. Cross-Level Pass: covers any level for students with carryovers or studying ahead
+            # 4. Cross-Level Pass: covers any level for students with carryovers or studying ahead
             conditions.append(
                 exists().where(
                     AccessPackage.id == Entitlement.package_id,
                     AccessPackage.package_type.in_(["cross_level", "all_access"]),
-                    or_(
-                        AccessPackage.semester_id.is_(None),
-                        AccessPackage.semester_id == res_obj.semester_id,
-                    ),
-                    or_(
-                        AccessPackage.academic_session_id.is_(None),
-                        AccessPackage.academic_session_id == res_obj.academic_session_id,
-                    ),
                 )
             )
 
-            # 3. Session Pass: covers the entire session for that level or across levels
-            if res_obj.academic_session_id:
+            # 5. Full Session Pass: If student has a session pass, it covers all materials of that level
+            # regardless of whether the past question was set in a previous session or current session!
+            if user_level_id is None or user_level_id == res_obj.academic_level_id:
                 conditions.append(
                     exists().where(
                         AccessPackage.id == Entitlement.package_id,
                         AccessPackage.package_type == "session",
-                        AccessPackage.academic_session_id == res_obj.academic_session_id,
-                        or_(
-                            AccessPackage.academic_level_id.is_(None),
-                            AccessPackage.academic_level_id == res_obj.academic_level_id,
-                        ),
                     )
                 )
+            else:
+                conditions.append(
+                    exists().where(
+                        AccessPackage.id == Entitlement.package_id,
+                        AccessPackage.package_type == "session",
+                        AccessPackage.academic_level_id == res_obj.academic_level_id,
+                    )
+                )
+
+            # 6. Active Subscription check for student's enrolled level
+            if user_level_id and (res_obj.academic_level_id is None or res_obj.academic_level_id == user_level_id):
+                # An active session pass subscription covers all resources for the enrolled level
+                conditions.append(
+                    exists().where(
+                        Entitlement.subscription_id == Subscription.id,
+                        Entitlement.user_id == user.id,
+                        Entitlement.status == "active",
+                        or_(Entitlement.expires_at.is_(None), Entitlement.expires_at > now),
+                        Subscription.user_id == user.id,
+                        Subscription.status == "active",
+                        Subscription.is_active.is_(True),
+                        Subscription.starts_at <= now,
+                        Subscription.ends_at > now,
+                        Payment.subscription_id == Subscription.id,
+                        Payment.status == "succeeded",
+                    )
+                )
+
     if course_id is not None:
         conditions.append(Entitlement.course_id == course_id)
         conditions.append(
@@ -574,7 +620,6 @@ def find_paid_entitlement(
                 Subscription.ends_at > now,
                 Payment.subscription_id == Subscription.id,
                 Payment.status == "succeeded",
-                Subscription.semester_id == semester_id,
             )
         )
     if not conditions:
@@ -600,6 +645,11 @@ def find_paid_entitlement(
 
 def resource_access(db: Session, user: User, resource: Resource) -> AccessDecision:
     """Decide whether a student may read this resource, and until when."""
+    # Superusers and administrators always have unrestricted access
+    is_admin = bool(user.is_superuser or (user.role_id is not None and user.role_id in (2, 9)))
+    if is_admin:
+        return AccessDecision(True, None)
+
     if resource.requires_verification and not is_verified_student(db, user):
         return AccessDecision(False, reason="verification_required")
 

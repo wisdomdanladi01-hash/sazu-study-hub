@@ -924,12 +924,12 @@ def admin_overview(
         "recent_payments": [
             {
                 "id": p.id,
-                "reference": p.paystack_reference or f"PAY-{p.id}",
+                "reference": p.provider_reference or p.idempotency_key or f"PAY-{p.id}",
                 "amount_minor": p.amount_minor,
                 "currency": p.currency,
                 "status": p.status,
-                "channel": p.channel,
-                "customer_email": p.customer_email,
+                "channel": p.provider or "paystack",
+                "customer_email": getattr(db.get(User, p.user_id), "email", None) if p.user_id else None,
                 "created_at": p.created_at.isoformat() if p.created_at else "",
             }
             for p in recent_payments

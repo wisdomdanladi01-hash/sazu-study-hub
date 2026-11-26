@@ -31,7 +31,7 @@ export function PricingPage() {
   const navigate = useNavigate();
   const [packages, setPackages] = useState<SubscriptionPackage[]>([]);
   const [loading, setLoading] = useState(true);
-  const [processingId, setProcessingId] = useState<number | null>(null);
+  const [processingKey, setProcessingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'primary' | 'cross_level' | 'single'>('all');
   const [modalPkg, setModalPkg] = useState<SubscriptionPackage | null>(null);
@@ -59,12 +59,13 @@ export function PricingPage() {
     };
   }, []);
 
-  const startCheckout = async (pkg: SubscriptionPackage) => {
+  const startCheckout = async (pkg: SubscriptionPackage, key?: string) => {
     if (!profile) {
       navigate(`/login?redirect=${encodeURIComponent('/pricing')}`);
       return;
     }
-    setProcessingId(pkg.id);
+    const actionKey = key ?? String(pkg.id);
+    setProcessingKey(actionKey);
     setError(null);
     try {
       const checkout = await paymentService.initializePayment(pkg.id);
@@ -79,7 +80,7 @@ export function PricingPage() {
           ? cause.message
           : 'Unable to initialize secure checkout. Please try again.'
       );
-      setProcessingId(null);
+      setProcessingKey(null);
       await refreshProfile();
     }
   };
@@ -253,8 +254,8 @@ export function PricingPage() {
                           size="lg"
                           fullWidth
                           className="bg-teal-600 hover:bg-teal-500 text-white font-bold shadow-md hover:shadow-lg transition-all"
-                          onClick={() => void startCheckout(primarySessionPkg)}
-                          loading={processingId === primarySessionPkg.id}
+                          onClick={() => void startCheckout(primarySessionPkg, 'session')}
+                          loading={processingKey === 'session'}
                           leftIcon={<CreditCard className="h-5 w-5" />}
                         >
                           Subscribe for Full Session (₦2,000)
@@ -338,8 +339,8 @@ export function PricingPage() {
                           fullWidth
                           variant="outline"
                           className="border-teal-600 text-teal-800 hover:bg-teal-50 font-bold transition-all"
-                          onClick={() => void startCheckout(primarySemesterPkg)}
-                          loading={processingId === primarySemesterPkg.id}
+                          onClick={() => void startCheckout(primarySemesterPkg, 'semester')}
+                          loading={processingKey === 'semester'}
                           leftIcon={<CreditCard className="h-5 w-5" />}
                         >
                           Subscribe for Semester (₦1,500)
@@ -426,8 +427,8 @@ export function PricingPage() {
                     <Button
                       fullWidth
                       className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
-                      onClick={() => primaryLevelPkg && void startCheckout(primaryLevelPkg)}
-                      loading={primaryLevelPkg ? processingId === primaryLevelPkg.id : false}
+                      onClick={() => primaryLevelPkg && void startCheckout(primaryLevelPkg, 'tier3')}
+                      loading={processingKey === 'tier3'}
                     >
                       Get Discounted Cross-Level Pass (₦1,000)
                     </Button>
@@ -486,8 +487,8 @@ export function PricingPage() {
                       fullWidth
                       variant="outline"
                       className="border-ink-300 font-bold"
-                      onClick={() => primaryLevelPkg && void startCheckout(primaryLevelPkg)}
-                      loading={primaryLevelPkg ? processingId === primaryLevelPkg.id : false}
+                      onClick={() => primaryLevelPkg && void startCheckout(primaryLevelPkg, 'tier4')}
+                      loading={processingKey === 'tier4'}
                     >
                       Get Standalone Level Pass (₦2,000)
                     </Button>
@@ -565,8 +566,8 @@ export function PricingPage() {
                     {primaryResourcePkg ? (
                       <Button
                         fullWidth
-                        onClick={() => void startCheckout(primaryResourcePkg)}
-                        loading={processingId === primaryResourcePkg.id}
+                        onClick={() => void startCheckout(primaryResourcePkg, 'tier5')}
+                        loading={processingKey === 'tier5'}
                       >
                         Unlock Single Document (₦300)
                       </Button>
@@ -635,8 +636,8 @@ export function PricingPage() {
                       <Button
                         fullWidth
                         className="bg-teal-700 hover:bg-teal-600 text-white font-bold"
-                        onClick={() => void startCheckout(primaryResourcePkg)}
-                        loading={processingId === primaryResourcePkg.id}
+                        onClick={() => void startCheckout(primaryResourcePkg, 'tier6')}
+                        loading={processingKey === 'tier6'}
                       >
                         Unlock as Subscriber (₦150)
                       </Button>

@@ -306,12 +306,12 @@ def initiate_subscription_payment(
 def verify_own_payment(
     reference: Annotated[str, Path(min_length=1, max_length=200)],
     response: Response,
-    user: User = Depends(get_current_user),
+    user: User | None = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ) -> PaymentVerificationResponse:
     try:
         payment, subscription = verify_payment(
-            db, reference, owner_user_id=user.id
+            db, reference, owner_user_id=user.id if user else None
         )
     except NotFoundError as exc:
         _raise_service_error(exc)

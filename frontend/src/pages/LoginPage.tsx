@@ -138,12 +138,25 @@ export function LoginPage() {
             <span>Back to Home</span>
           </Link>
 
-          <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-ink-950 tracking-tight">
-            Welcome back
+          <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-ink-950 tracking-tight leading-tight">
+            Unlock Your Academic Potential with Sazu Study Hub
           </h1>
-          <p className="mt-1.5 text-sm text-ink-600">
-            Sign in to access your course materials, lecture handouts, and practice assessments.
+          <p className="mt-2 text-sm sm:text-base text-ink-700 leading-relaxed font-medium">
+            Past questions, exams and handouts for your exact courses — organized, searchable and ready when you are.
           </p>
+        </div>
+
+        {/* Action Toggle: Get Started Free vs Login */}
+        <div className="grid grid-cols-2 gap-2 p-1 mb-6 rounded-2xl bg-ink-100/80 border border-ink-200">
+          <Link
+            to={redirect ? `/register?redirect=${redirect}` : '/register'}
+            className="flex items-center justify-center py-2 px-3 rounded-xl text-xs sm:text-sm font-bold text-ink-700 hover:text-teal-800 transition-colors"
+          >
+            Get Started Free
+          </Link>
+          <div className="flex items-center justify-center py-2 px-3 rounded-xl text-xs sm:text-sm font-bold bg-white text-teal-800 shadow-xs border border-ink-150">
+            Login
+          </div>
         </div>
 
         {error && (
@@ -232,25 +245,41 @@ export function LoginPage() {
             </span>
           </div>
 
-          <Button
-            type="submit"
-            fullWidth
-            size="lg"
-            loading={loading}
-            className="h-12 text-base font-semibold shadow-md active:scale-[0.99] transition-transform"
-          >
-            Sign in to Study Hub
-          </Button>
+          <div className="space-y-3 pt-2">
+            <Button
+              type="submit"
+              fullWidth
+              size="lg"
+              loading={loading}
+              className="h-12 text-base font-bold shadow-md active:scale-[0.99] transition-transform bg-teal-600 hover:bg-teal-500 text-white"
+            >
+              Login
+            </Button>
+            <Link
+              to={redirect ? `/register?redirect=${redirect}` : '/register'}
+              className="block"
+            >
+              <Button
+                type="button"
+                fullWidth
+                size="lg"
+                variant="outline"
+                className="h-12 text-base font-bold border-teal-600 text-teal-800 hover:bg-teal-50 transition-colors"
+              >
+                Get Started Free
+              </Button>
+            </Link>
+          </div>
         </form>
 
         <div className="mt-8 pt-6 border-t border-ink-100 text-center">
-          <p className="text-sm text-ink-600">
-            Don't have an account yet?{' '}
+          <p className="text-sm text-ink-700">
+            Need an account?{' '}
             <Link
               to={redirect ? `/register?redirect=${redirect}` : '/register'}
-              className="font-bold text-teal-700 hover:text-teal-800 underline underline-offset-2 ml-1"
+              className="font-bold text-teal-700 hover:text-teal-900 underline underline-offset-2 ml-1"
             >
-              Create student account
+              Get Started Free &rarr;
             </Link>
           </p>
         </div>

@@ -5,7 +5,7 @@ import { VerificationReminderModal } from '@/components/VerificationReminderModa
 
 export function AppLayout() {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col overflow-x-clip w-full">
       <Header />
       <main className="flex-1">
         <Outlet />

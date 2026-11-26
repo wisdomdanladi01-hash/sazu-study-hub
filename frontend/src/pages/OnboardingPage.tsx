@@ -404,7 +404,7 @@ export function OnboardingPage() {
                     label="Matriculation Number (Preferred)"
                     value={matricNumber}
                     onChange={(e) => setMatricNumber(e.target.value)}
-                    placeholder="e.g. CSCU/23/7877"
+                    placeholder="e.g. SAZU/2024/0001"
                   />
                   <Input
                     label="JAMB Registration Number (Freshers)"

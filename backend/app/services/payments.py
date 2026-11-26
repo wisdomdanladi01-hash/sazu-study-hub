@@ -820,34 +820,39 @@ def verify_payment(
             db.add(PackageCourse(package_id=package.id, course_id=course.id))
 
     elif pkg_type in ("resource", "resource_package"):
-        res = db.get(Resource, package.resource_id)
-        if res is None:
-            payment.status = "succeeded"
-            payment.verified_at = now
-            payment.refund_review_status = "pending"
-            payment.failure_reason = "Verified payment has no valid resource; manual reconciliation is required."
-            db.commit()
-            return payment, None
-
+        res = db.get(Resource, package.resource_id) if package.resource_id else None
         res_expires = now + timedelta(days=365)
-        db.add(
-            Entitlement(
-                user_id=payment.user_id,
-                payment_id=payment.id,
-                package_id=package.id,
-                resource_id=res.id,
-                scope_key=f"resource:{res.id}:{payment.id}",
-                expires_at=res_expires,
-                status="active",
+        if res is not None:
+            db.add(
+                Entitlement(
+                    user_id=payment.user_id,
+                    payment_id=payment.id,
+                    package_id=package.id,
+                    resource_id=res.id,
+                    scope_key=f"resource:{res.id}:{payment.id}",
+                    expires_at=res_expires,
+                    status="active",
+                )
             )
-        )
-        pr = db.scalar(
-            select(PackageResource).where(
-                PackageResource.package_id == package.id, PackageResource.resource_id == res.id
+            pr = db.scalar(
+                select(PackageResource).where(
+                    PackageResource.package_id == package.id, PackageResource.resource_id == res.id
+                )
             )
-        )
-        if not pr:
-            db.add(PackageResource(package_id=package.id, resource_id=res.id))
+            if not pr:
+                db.add(PackageResource(package_id=package.id, resource_id=res.id))
+        else:
+            # General micro-pass or single resource pass unlocked for the configured level
+            db.add(
+                Entitlement(
+                    user_id=payment.user_id,
+                    payment_id=payment.id,
+                    package_id=package.id,
+                    scope_key=f"resource_package:{package.id}:{payment.id}",
+                    expires_at=res_expires,
+                    status="active",
+                )
+            )
 
     payment.status = "succeeded"
     payment.verified_at = now

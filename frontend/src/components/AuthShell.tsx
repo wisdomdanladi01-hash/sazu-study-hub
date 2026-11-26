@@ -21,10 +21,10 @@ export function AuthShell({ children }: { children: ReactNode }) {
                 </span>
               </div>
               <h2 className="mt-14 max-w-md font-display text-4xl font-extrabold leading-tight tracking-tight text-white xl:text-[2.75rem]">
-                Your learning journey, in one place.
+                Unlock Your Academic Potential with Sazu Study Hub
               </h2>
               <p className="mt-4 max-w-md text-base leading-relaxed text-ink-200">
-                Find course materials, follow your academic catalogue, and access study & examination practice tests easily on mobile.
+                Past questions, exams and handouts for your exact courses — organized, searchable and ready when you are.
               </p>
             </div>
 
