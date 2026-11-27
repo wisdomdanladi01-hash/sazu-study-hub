@@ -158,6 +158,7 @@ def main():
         rt_exam_pq = get_or_create_resource_type(db, "Exam Past Question")
         rt_solution = get_or_create_resource_type(db, "Solution & Marking Guide")
         rt_textbook = get_or_create_resource_type(db, "Textbook & Reference Material")
+        rt_reference = get_or_create_resource_type(db, "Reference Material (Supplementary)")
         rt_assignment = get_or_create_resource_type(db, "Assignment / Problem Set")
         rt_syllabus = get_or_create_resource_type(db, "Course Syllabus / Outline")
 
@@ -730,18 +731,19 @@ def main():
                 "preview_content": "Real Analysis: Epsilon-delta definitions, Cauchy sequences, limit points, open and closed sets, and continuous mappings.",
             },
             {
-                "title": "STA105: Descriptive Statistics & Data Presentation (Parts 1 & 2)",
-                "description": "Comprehensive 100 Level statistics lecture modules covering frequency distributions, histograms, measures of central tendency (mean, median, mode), measures of dispersion (variance, standard deviation, interquartile range), and graphical presentation.",
+                "title": "STA105: Descriptive Statistics & Data Presentation (External FUD Reference Manual)",
+                "description": "External reference study guide on descriptive statistics and data presentation (Federal University Dutse curriculum). Sourced for comparative statistical reference and foundational problem solving (External supplementary reference — not official SAZU syllabus).",
                 "course": c_sta105,
                 "offering": off_sta105,
                 "level": level_100,
                 "semester": sem_2025_1,
-                "resource_type": rt_handout,
+                "resource_type": rt_reference,
+                "access_policy": "public",
                 "files": [
                     (read_bytes("FUD-STA105-Descriptive Statistics-Part1_074323.pdf"), "STA105_Descriptive_Statistics_Part1.pdf", "application/pdf"),
                     (read_bytes("Presentation of Data FUD-STA105_PART TWO.pdf"), "STA105_Presentation_of_Data_Part2.pdf", "application/pdf"),
                 ],
-                "preview_content": "Descriptive Statistics: Grouped data calculations, coefficient of variation, skewness, kurtosis, and ogive curve construction.",
+                "preview_content": "Descriptive Statistics Reference: Grouped data calculations, coefficient of variation, skewness, kurtosis, and ogive curve construction.",
             },
             {
                 "title": "STA3307: Sampling Theory & Survey Methodology",
@@ -801,17 +803,18 @@ def main():
 
             # --- GENERAL STUDIES & MOBILE APP DEV ---
             {
-                "title": "GST103: Use of Library, Study Skills & Information Technology",
-                "description": "Official General Studies curriculum handbook for all undergraduate freshmen. Classification systems (Dewey Decimal, Library of Congress), citation standards (APA, MLA), academic research databases, copyright laws, and computing fundamentals.",
+                "title": "GST103: Use of Library, Study Skills & Information Technology (External Reference Handbook)",
+                "description": "External supplementary reference handbook for university study skills and library science. Sourced from external reference curriculum for conceptual cross-study and reference only (Not official SAZU courseware).",
                 "course": c_gst103,
                 "offering": off_gst103,
                 "level": level_100,
                 "semester": sem_2025_1,
-                "resource_type": rt_handout,
+                "resource_type": rt_reference,
+                "access_policy": "public",
                 "files": [
                     (read_bytes("GST103 PDF.pdf"), "GST103_Library_Study_Skills_Manual.pdf", "application/pdf")
                 ],
-                "preview_content": "GST103 University Requirements: Information retrieval, academic integrity, reference compilation, and electronic library catalogues.",
+                "preview_content": "GST103 Reference Guide: Information retrieval, academic integrity, reference compilation, and electronic library catalogues.",
             },
             {
                 "title": "BASUG-COS120: Mobile Application and Development — Revised Course Manual",
@@ -902,7 +905,7 @@ def main():
                         semester_id=u["semester"].id,
                         resource_type_id=u["resource_type"].id,
                         is_published=True,
-                        access_policy="subscription_or_entitlement",
+                        access_policy=u.get("access_policy", "subscription_or_entitlement"),
                         preview_policy="public_sample",
                         preview_content=u.get("preview_content"),
                         requires_verification=True,

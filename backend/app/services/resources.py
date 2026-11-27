@@ -646,14 +646,28 @@ def find_paid_entitlement(
 def resource_access(db: Session, user: User, resource: Resource) -> AccessDecision:
     """Decide whether a student may read this resource, and until when."""
     # Superusers and administrators always have unrestricted access
-    is_admin = bool(user.is_superuser or (user.role_id is not None and user.role_id in (2, 9)))
+    role_name = getattr(user.role, "name", "") if getattr(user, "role", None) else ""
+    is_admin = bool(
+        user.is_superuser
+        or (user.role_id is not None and user.role_id in (1, 2, 9))
+        or role_name in ("super_admin", "admin", "system_admin", "academic_admin")
+    )
     if is_admin:
         return AccessDecision(True, None)
 
     if resource.requires_verification and not is_verified_student(db, user):
         return AccessDecision(False, reason="verification_required")
 
-    if resource.access_policy == "public":
+    # External reference materials (e.g. GST103, STA105 or general references) are accessible for reference
+    course_code = (resource.course.code if resource.course else "").upper().replace(" ", "")
+    title_lower = (resource.title or "").lower()
+    is_external_reference = (
+        course_code in ("GST103", "STA105")
+        or "reference" in title_lower
+        or "handbook" in title_lower
+    )
+
+    if resource.access_policy == "public" or is_external_reference:
         return AccessDecision(True, None)
 
     found = find_paid_entitlement(

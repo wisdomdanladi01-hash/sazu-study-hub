@@ -39,6 +39,16 @@ export function CourseResourceCard({ course, resources, defaultExpanded = false 
   const is100L = level === '100' || (course.code || '').match(/^[A-Z]+\s*1/i);
   const semester = resources[0]?.semester;
 
+  const isReferenceCourse =
+    (course.code || '').toUpperCase().includes('GST103') ||
+    (course.code || '').toUpperCase().includes('STA105') ||
+    (course.title || '').toLowerCase().includes('reference') ||
+    resources.some(
+      (r) =>
+        (r.type || '').toLowerCase().includes('reference') ||
+        (r.title || '').toLowerCase().includes('reference')
+    );
+
   // Categorize materials
   const handouts = resources.filter(
     (r) =>
@@ -99,6 +109,11 @@ export function CourseResourceCard({ course, resources, defaultExpanded = false 
                 ✨ 100L Foundation
               </Badge>
             )}
+            {isReferenceCourse && (
+              <Badge tone="purple" className="flex items-center gap-1 font-semibold border border-purple-200">
+                <BookOpen className="h-3 w-3 text-purple-700" /> Reference Material
+              </Badge>
+            )}
             {level && <Badge tone="neutral">Level {level}</Badge>}
             {semester && <Badge tone="neutral">{semester} Semester</Badge>}
           </div>
@@ -114,6 +129,15 @@ export function CourseResourceCard({ course, resources, defaultExpanded = false 
 
         {course.department && (
           <p className="text-xs text-ink-500 font-medium mt-1">{course.department}</p>
+        )}
+
+        {isReferenceCourse && (
+          <div className="mt-3 p-3 rounded-xl bg-purple-50/70 border border-purple-200/80 text-xs text-purple-950 leading-relaxed flex items-start gap-2">
+            <span className="font-bold shrink-0 text-purple-800">External Reference Notice:</span>
+            <span>
+              These documents are supplementary reference materials from external university curricula (e.g. general studies or cross-institutional texts). Sourced for comparative conceptual study and literature reference only — not official SAZU syllabus materials.
+            </span>
+          </div>
         )}
 
         {/* Content Summary Breakdown Pills */}
@@ -178,57 +202,64 @@ export function CourseResourceCard({ course, resources, defaultExpanded = false 
           </p>
 
           <div className="space-y-2.5">
-            {resources.map((item) => (
-              <div
-                key={item.id}
-                className="rounded-xl p-3.5 bg-white border border-ink-200 hover:border-teal-300 hover:shadow-xs transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold text-xs text-teal-800 bg-teal-50 px-2 py-0.5 rounded border border-teal-200/60">
-                      {item.type}
-                    </span>
-                    {item.session && (
-                      <span className="text-[11px] font-mono text-ink-600 bg-ink-100 px-2 py-0.5 rounded">
-                        Session: {item.session}
+            {resources.map((item) => {
+              const itemIsRef =
+                (item.type || '').toLowerCase().includes('reference') ||
+                (item.title || '').toLowerCase().includes('reference') ||
+                isReferenceCourse;
+
+              return (
+                <div
+                  key={item.id}
+                  className="rounded-xl p-3.5 bg-white border border-ink-200 hover:border-teal-300 hover:shadow-xs transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`font-semibold text-xs px-2 py-0.5 rounded border ${itemIsRef ? 'text-purple-800 bg-purple-50 border-purple-200' : 'text-teal-800 bg-teal-50 border-teal-200/60'}`}>
+                        {itemIsRef ? 'External Reference' : item.type}
                       </span>
-                    )}
-                    <span className="text-[11px] text-ink-500 flex items-center gap-1">
-                      {item.accessPolicy === 'public' ? (
-                        <>
-                          <Download className="h-3 w-3 text-teal-600" /> Free Public
-                        </>
-                      ) : (
-                        <>
-                          <Lock className="h-3 w-3 text-amber-600" /> Subscribed
-                        </>
+                      {item.session && (
+                        <span className="text-[11px] font-mono text-ink-600 bg-ink-100 px-2 py-0.5 rounded">
+                          Session: {item.session}
+                        </span>
                       )}
-                    </span>
+                      <span className="text-[11px] text-ink-500 flex items-center gap-1">
+                        {item.accessPolicy === 'public' ? (
+                          <>
+                            <Download className="h-3 w-3 text-teal-600" /> Free Public
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="h-3 w-3 text-amber-600" /> Subscribed
+                          </>
+                        )}
+                      </span>
+                    </div>
+
+                    <h4 className="font-display font-bold text-sm text-ink-950 mt-1.5 leading-snug">
+                      {item.title}
+                    </h4>
+
+                    <p className="text-xs text-ink-600 line-clamp-1 mt-0.5">
+                      {item.description}
+                    </p>
                   </div>
 
-                  <h4 className="font-display font-bold text-sm text-ink-950 mt-1.5 leading-snug">
-                    {item.title}
-                  </h4>
-
-                  <p className="text-xs text-ink-600 line-clamp-1 mt-0.5">
-                    {item.description}
-                  </p>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Link to={`/materials/${item.id}`}>
+                      <Button size="sm" variant="outline" className="text-xs">
+                        {item.accessPolicy === 'public' ? 'Details' : 'Details / Unlock'}
+                      </Button>
+                    </Link>
+                    <Link to={`/materials/${item.id}/read`}>
+                      <Button size="sm" leftIcon={<Eye className="h-3.5 w-3.5" />} className="text-xs font-bold shadow-2xs">
+                        Read
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <Link to={`/materials/${item.id}`}>
-                    <Button size="sm" variant="outline" className="text-xs">
-                      Details
-                    </Button>
-                  </Link>
-                  <Link to={`/materials/${item.id}/read`}>
-                    <Button size="sm" leftIcon={<Eye className="h-3.5 w-3.5" />} className="text-xs font-bold shadow-2xs">
-                      Read
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

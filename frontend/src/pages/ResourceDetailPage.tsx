@@ -369,6 +369,14 @@ export function ResourceDetailPage() {
         <div>
           <div className="flex flex-wrap items-center gap-2 mb-3">
             <Badge tone="teal">{resource.type}</Badge>
+            {((resource.course.code || '').toUpperCase().includes('GST103') ||
+              (resource.course.code || '').toUpperCase().includes('STA105') ||
+              (resource.type || '').toLowerCase().includes('reference') ||
+              (resource.title || '').toLowerCase().includes('reference')) && (
+              <Badge tone="purple" className="font-semibold">
+                External Reference
+              </Badge>
+            )}
             <Badge tone="neutral">Level {resource.level}</Badge>
             <Badge tone="neutral">{resource.semester} semester</Badge>
             <Badge tone="neutral">
@@ -432,6 +440,31 @@ export function ResourceDetailPage() {
             </Card>
           )}
 
+          {/* External Reference Notice for GST103, STA105, or Reference Documents */}
+          {((resource.course.code || '').toUpperCase().includes('GST103') ||
+            (resource.course.code || '').toUpperCase().includes('STA105') ||
+            (resource.type || '').toLowerCase().includes('reference') ||
+            (resource.title || '').toLowerCase().includes('reference')) && (
+            <Card className="mt-5 p-4 sm:p-5 border-purple-200 bg-gradient-to-r from-purple-50/80 via-white to-purple-50/40">
+              <div className="flex items-start gap-3">
+                <span className="p-2 rounded-xl bg-purple-100 text-purple-800 shrink-0">
+                  <BookOpen className="h-5 w-5" />
+                </span>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-purple-950">
+                      External Supplementary Reference Material
+                    </h3>
+                    <Badge tone="purple" className="text-[10px]">Reference Only</Badge>
+                  </div>
+                  <p className="text-xs text-purple-900 leading-relaxed">
+                    This document is categorized as external reference material (e.g. general university studies handbook or cross-institutional text). It is provided strictly for conceptual study, literature reference, and cross-comparison, and does not constitute official Sa&apos;azu Zungur University exam courseware.
+                  </p>
+                </div>
+              </div>
+            </Card>
+          )}
+
           {/* Real Preview Section */}
           <section className="mt-7">
             <div className="flex items-center gap-2 mb-3">
@@ -465,8 +498,8 @@ export function ResourceDetailPage() {
                 ? profile.isAdmin
                   ? 'Administrator account recognized. Full watermarked viewer preview is authorized.'
                   : profile.hasSubscription
-                  ? 'Your semester subscription is active. You can read the full material.'
-                  : "You're signed in. Add a semester subscription to unlock the full material."
+                    ? 'Your semester subscription is active. You can read the full material.'
+                    : "You're signed in. Add a semester subscription to unlock the full material."
                 : 'Sign in to unlock the full material. A semester subscription may also be required.'}
             </p>
             <div className="mt-4 space-y-2.5">

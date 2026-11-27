@@ -283,13 +283,12 @@ export function ChallengingCoursesTracker() {
                     <button
                       type="button"
                       onClick={() => handleToggleStatus(course.id)}
-                      className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border transition cursor-pointer ${
-                        course.status === 'mastered'
-                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                          : course.status === 'improving'
-                            ? 'bg-sky-50 text-sky-800 border-sky-300'
-                            : 'bg-amber-50 text-amber-800 border-amber-300'
-                      }`}
+                      className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border transition cursor-pointer ${course.status === 'mastered'
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                        : course.status === 'improving'
+                          ? 'bg-sky-50 text-sky-800 border-sky-300'
+                          : 'bg-amber-50 text-amber-800 border-amber-300'
+                        }`}
                     >
                       {course.status === 'mastered'
                         ? '✓ Mastered'

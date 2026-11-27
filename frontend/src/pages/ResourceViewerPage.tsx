@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, CloudDownload, CloudOff, Lock, ShieldCheck, Trash2, WifiOff } from 'lucide-react';
+import { ArrowLeft, CloudDownload, CloudOff, FileText, Lock, ShieldCheck, Trash2, WifiOff } from 'lucide-react';
 import { ApiError, getAccessToken } from '@/services/api';
 import { viewerService, type ViewerManifest } from '@/services/viewer';
 import {
@@ -17,8 +17,77 @@ import { Card } from '@/components/ui/Card';
 
 type PageLoader = (pageNumber: number) => Promise<Blob>;
 
+/** High-legibility academic paper renderer for word-processing and text documents. */
+function AcademicDocumentPageView({ text, number, watermark }: { text: string; number: number; watermark?: string }) {
+  const paragraphs = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+
+  return (
+    <div className="relative mx-auto w-full max-w-3xl bg-white shadow-card rounded-2xl border border-ink-150 p-6 sm:p-12 font-sans select-none overflow-hidden">
+      {/* Paper Header / Document Masthead */}
+      <div className="border-b border-ink-100 pb-4 mb-6 flex items-center justify-between text-xs text-ink-500">
+        <span className="inline-flex items-center gap-1.5 font-bold text-teal-800 bg-teal-50 px-2.5 py-1 rounded-md border border-teal-200/60">
+          <FileText className="h-3.5 w-3.5" /> Academic Document Reader
+        </span>
+        <span className="font-mono text-ink-400">Page {number}</span>
+      </div>
+
+      {/* Subtle security watermark across background */}
+      {watermark && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.035] -rotate-12 font-mono text-xl sm:text-2xl text-ink-950 select-none">
+          {watermark} &bull; SAZU STUDY HUB
+        </div>
+      )}
+
+      {/* Formatted Content */}
+      <div className="space-y-4 text-ink-850 text-sm sm:text-base leading-relaxed">
+        {paragraphs.map((p, idx) => {
+          const isHeading =
+            p.length < 90 &&
+            (p === p.toUpperCase() ||
+              /^(CHAPTER|MODULE|SECTION|PART|TOPIC|UNIT|[0-9]+(\.[0-9]+)*)/i.test(p) ||
+              p.endsWith(':'));
+
+          if (isHeading) {
+            return (
+              <h3
+                key={idx}
+                className="font-display font-bold text-ink-950 text-base sm:text-lg mt-6 pt-2 border-t border-ink-100 first:mt-0 first:border-0"
+              >
+                {p}
+              </h3>
+            );
+          }
+
+          if (p.startsWith('- ') || p.startsWith('• ') || p.startsWith('* ')) {
+            const items = p.split('\n').filter(Boolean);
+            return (
+              <ul key={idx} className="list-disc pl-5 space-y-1.5 text-ink-800">
+                {items.map((it, itemIdx) => (
+                  <li key={itemIdx}>{it.replace(/^[-•*]\s*/, '')}</li>
+                ))}
+              </ul>
+            );
+          }
+
+          return (
+            <p key={idx} className="text-ink-800 leading-relaxed text-[0.9375rem]">
+              {p}
+            </p>
+          );
+        })}
+      </div>
+
+      {/* Page Footer */}
+      <div className="mt-8 pt-4 border-t border-ink-100 flex items-center justify-between text-[11px] text-ink-400">
+        <span>Verified Course Document &bull; SAZU Study Hub</span>
+        <span>Secure In-App Viewer</span>
+      </div>
+    </div>
+  );
+}
+
 /** One page, fetched only when it scrolls near the screen. */
-function ViewerPageView({ number, kind, load }: { number: number; kind: 'image' | 'text'; load: PageLoader }) {
+function ViewerPageView({ number, kind, load, watermark }: { number: number; kind: 'image' | 'text'; load: PageLoader; watermark?: string }) {
   const holder = useRef<HTMLDivElement | null>(null);
   const [url, setUrl] = useState<string | null>(null);
   const [text, setText] = useState<string | null>(null);
@@ -57,20 +126,24 @@ function ViewerPageView({ number, kind, load }: { number: number; kind: 'image' 
   }, [number, kind, load]);
 
   return (
-    <div ref={holder} className="mx-auto w-full max-w-3xl min-h-[320px] bg-white shadow-soft rounded-lg overflow-hidden">
+    <div ref={holder} className="mx-auto w-full max-w-3xl min-h-[320px] rounded-lg overflow-hidden">
       {failed ? (
-        <p className="p-6 text-sm text-red-700">{failed}</p>
+        <div className="bg-white p-6 shadow-soft rounded-lg">
+          <p className="text-sm text-red-700">{failed}</p>
+        </div>
       ) : url ? (
-        <img
-          src={url}
-          alt={`Page ${number}`}
-          draggable={false}
-          className="block w-full h-auto select-none pointer-events-none"
-        />
+        <div className="bg-white shadow-soft rounded-lg overflow-hidden">
+          <img
+            src={url}
+            alt={`Page ${number}`}
+            draggable={false}
+            className="block w-full h-auto select-none pointer-events-none"
+          />
+        </div>
       ) : text !== null ? (
-        <pre className="p-6 text-sm whitespace-pre-wrap break-words text-ink-800 select-none">{text}</pre>
+        <AcademicDocumentPageView text={text} number={number} watermark={watermark} />
       ) : (
-        <div className="p-10 text-center text-xs text-ink-400">Loading page {number}…</div>
+        <div className="bg-white p-10 text-center text-xs text-ink-400 shadow-soft rounded-lg">Loading page {number}…</div>
       )}
     </div>
   );
@@ -180,33 +253,86 @@ export function ResourceViewerPage() {
   };
 
   if (error) {
+    const isSubscriptionNeeded = error.status === 403;
+    const isSignInNeeded = error.status === 401;
+
     return (
       <div className="container-page py-12 max-w-xl">
-        <Alert tone={error.status === 0 ? 'warning' : 'error'} title="Unable to open this material">
-          {error.message}
-        </Alert>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {error.status === 401 && (
-            <Link to={`/login?redirect=${encodeURIComponent(`/materials/${id}/read`)}`}>
-              <Button leftIcon={<Lock className="h-4 w-4" />}>Sign in</Button>
+        <Card className="p-6 sm:p-8 border-ink-200 shadow-card bg-white">
+          <div className="flex items-center gap-3.5 mb-5">
+            <span className={`p-3 rounded-2xl ${isSubscriptionNeeded ? 'bg-amber-100 text-amber-900' : 'bg-teal-100 text-teal-900'}`}>
+              <Lock className="h-6 w-6" />
+            </span>
+            <div>
+              <h2 className="font-display text-xl font-bold text-ink-950">
+                {isSubscriptionNeeded
+                  ? 'Access Controlled: Subscription Required'
+                  : isSignInNeeded
+                  ? 'Sign In Required'
+                  : 'Unable to Open This Material'}
+              </h2>
+              <p className="text-xs text-ink-500 mt-0.5 font-medium">
+                {isSubscriptionNeeded ? 'Protected Academic Material & Verified Access' : 'Authentication Status'}
+              </p>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-xl bg-ink-50/80 border border-ink-150 text-sm text-ink-700 leading-relaxed mb-6">
+            {isSubscriptionNeeded ? (
+              <div className="space-y-3">
+                <p>
+                  This course document is protected for subscribed students and verified scholars. If you are enrolled in this level or course, choose an access pass below to unlock instant viewing.
+                </p>
+                <div className="text-xs text-ink-700 bg-white p-3 rounded-xl border border-ink-200 shadow-2xs space-y-1.5">
+                  <span className="font-bold text-ink-900 block">Available student passes:</span>
+                  <div className="flex items-center justify-between py-1 border-b border-ink-100">
+                    <span>Single Material Pass</span>
+                    <strong className="text-teal-700 font-mono">&#8358;300</strong>
+                  </div>
+                  <div className="flex items-center justify-between py-1 border-b border-ink-100">
+                    <span>Per Semester Pass (All Level Materials)</span>
+                    <strong className="text-teal-700 font-mono">&#8358;1,500</strong>
+                  </div>
+                  <div className="flex items-center justify-between py-1">
+                    <span>Full Session All-Access Pass</span>
+                    <strong className="text-teal-700 font-mono">&#8358;2,000</strong>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              error.message
+            )}
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2.5">
+            {isSubscriptionNeeded && (
+              <>
+                <Link to={`/materials/${id}`} className="flex-1">
+                  <Button fullWidth leftIcon={<Lock className="h-4 w-4" />}>
+                    Unlock Material (&#8358;300)
+                  </Button>
+                </Link>
+                <Link to="/pricing" className="flex-1">
+                  <Button variant="outline" fullWidth>
+                    View All Plans
+                  </Button>
+                </Link>
+              </>
+            )}
+            {isSignInNeeded && (
+              <Link to={`/login?redirect=${encodeURIComponent(`/materials/${id}/read`)}`} className="flex-1">
+                <Button fullWidth leftIcon={<Lock className="h-4 w-4" />}>
+                  Sign in to Access
+                </Button>
+              </Link>
+            )}
+            <Link to={`/materials/${id}`} className="sm:w-auto">
+              <Button variant="ghost" fullWidth leftIcon={<ArrowLeft className="h-4 w-4" />}>
+                Details
+              </Button>
             </Link>
-          )}
-          {error.status === 403 && (
-            <Link to="/pricing">
-              <Button>View subscription options</Button>
-            </Link>
-          )}
-          <Link to={`/materials/${id}`}>
-            <Button variant="outline" leftIcon={<ArrowLeft className="h-4 w-4" />}>
-              Back to material
-            </Button>
-          </Link>
-          <Link to="/offline">
-            <Button variant="ghost" leftIcon={<CloudOff className="h-4 w-4" />}>
-              Offline library
-            </Button>
-          </Link>
-        </div>
+          </div>
+        </Card>
       </div>
     );
   }
@@ -220,6 +346,7 @@ export function ResourceViewerPage() {
     mode === 'offline' ? (offlineItem?.kinds ?? []) : (manifest?.pages.map((page) => page.kind) ?? []);
   const loader = mode === 'offline' ? offlineLoader : onlineLoader;
   const stale = mode === 'online' && offlineItem && manifest && offlineItem.version !== manifest.version;
+  const hasTextPages = kinds.includes('text');
 
   return (
     <div className="secure-viewer container-page py-6 sm:py-8" onContextMenu={(event) => event.preventDefault()}>
@@ -262,6 +389,15 @@ export function ResourceViewerPage() {
         </div>
       </div>
 
+      {hasTextPages && (
+        <div className="mb-4 p-3 rounded-xl bg-teal-50 border border-teal-200 text-teal-900 text-xs flex items-center gap-2">
+          <FileText className="h-4 w-4 text-teal-700 shrink-0" />
+          <span>
+            <strong>Digital Document Reader:</strong> Word document (.docx) and syllabus notes are rendered in high-legibility book pages for comfortable mobile and desktop reading.
+          </span>
+        </div>
+      )}
+
       {notice && (
         <Alert tone="info" className="mb-4">
           {notice}
@@ -284,7 +420,13 @@ export function ResourceViewerPage() {
       ) : (
         <div className="space-y-4 select-none">
           {kinds.map((kind, index) => (
-            <ViewerPageView key={`${mode}-${index + 1}`} number={index + 1} kind={kind} load={loader} />
+            <ViewerPageView
+              key={`${mode}-${index + 1}`}
+              number={index + 1}
+              kind={kind}
+              load={loader}
+              watermark={manifest?.watermark}
+            />
           ))}
         </div>
       )}

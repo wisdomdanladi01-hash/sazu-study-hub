@@ -221,11 +221,10 @@ export function MaterialsPage() {
                 <button
                   type="button"
                   onClick={() => setViewMode('grouped')}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
-                    viewMode === 'grouped'
-                      ? 'bg-white text-teal-800 shadow-xs'
-                      : 'text-ink-600 hover:text-ink-950'
-                  }`}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${viewMode === 'grouped'
+                    ? 'bg-white text-teal-800 shadow-xs'
+                    : 'text-ink-600 hover:text-ink-950'
+                    }`}
                 >
                   <LayoutGrid className="h-3.5 w-3.5" />
                   <span>Course Hub ({courseGroups.length})</span>
@@ -233,11 +232,10 @@ export function MaterialsPage() {
                 <button
                   type="button"
                   onClick={() => setViewMode('list')}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
-                    viewMode === 'list'
-                      ? 'bg-white text-teal-800 shadow-xs'
-                      : 'text-ink-600 hover:text-ink-950'
-                  }`}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${viewMode === 'list'
+                    ? 'bg-white text-teal-800 shadow-xs'
+                    : 'text-ink-600 hover:text-ink-950'
+                    }`}
                 >
                   <List className="h-3.5 w-3.5" />
                   <span>All Items ({result.items.length})</span>

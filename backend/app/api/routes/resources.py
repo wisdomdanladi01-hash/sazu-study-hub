@@ -81,6 +81,11 @@ def _read_upload(upload: UploadFile) -> bytes:
 def _is_admin(db: Session, user: User) -> bool:
     if user.is_superuser:
         return True
+    if user.role_id in (1, 2, 9):
+        return True
+    role_name = getattr(user.role, "name", "") if getattr(user, "role", None) else ""
+    if role_name in ("super_admin", "admin", "system_admin", "academic_admin"):
+        return True
     caps = get_user_capabilities(user, db)
     return bool({"manage_resources", "preview_resources"} & caps)
 
